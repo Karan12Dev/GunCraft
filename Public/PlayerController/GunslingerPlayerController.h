@@ -6,9 +6,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GunslingerPlayerController.generated.h"
 
-/**
- * 
- */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FHighPingDelegate, bool, bPingTooHigh);
+
 UCLASS()
 class GUNCRAFT_API AGunslingerPlayerController : public APlayerController
 {
@@ -16,11 +15,12 @@ class GUNCRAFT_API AGunslingerPlayerController : public APlayerController
 
 public:
 	virtual void Tick(float DeltaTime) override;
-	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void OnPossess(APawn* InPawn) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void ReceivedPlayer() override;
 	virtual float GetServerTime();
 	void SetHUDHealth(float Health, float MaxHealth);
+	void SetHUDSheild(float Sheild, float MaxSheild);
 	void SetHUDScore(float Score);
 	void SetHUDDefeats(int32 Defeats);
 	void SetHUDWeaponAmmo(int32 Ammo);
@@ -28,18 +28,25 @@ public:
 	void SetHUDWeaponName(FName WeaponName);
 	void SetHUDMatchCountDown(float CountDownTime);
 	void SetHUDAnnouncementCountDown(float CountDownTime);
+	void SetHUDGrenades(int32 Grenades);
 	void OnMatchStateSet(FName State);
 	void HandleMatchHasStarted();
 	void HandleCooldown();
 
+	float SingleTripTime = 0.f;
+
+	FHighPingDelegate HighPingDelegate;
+
+	void BroadcastElim(APlayerState* Attacker, APlayerState* Victim);
+
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
 	void SetHUDTime();
 	void PollInt();
 
 	//	Sync time between Client and Server	//
-
 	// Requests the current server time, passing in the client's time when the request was sent
 	UFUNCTION(Server, Reliable)
 	void ServerRequestServerTime(float TimeofClientRequest);
@@ -53,6 +60,9 @@ protected:
 
 	UFUNCTION(Client, Reliable)
 	void ClientJoinMidGame(FName StateOfMatch, float Warmup, float Match, float Cooldown, float StartingTime);
+
+	UFUNCTION(Client, Reliable)
+	void ClientElimAnnouncement(APlayerState* Attacker, APlayerState* Victim);
 
 
 private:
@@ -82,10 +92,47 @@ private:
 
 	UPROPERTY()
 	class UCharacterOverlay* CharacterOverlay;
-	bool bInitializeCharacterOverlay = false;
 
 	float HUDHealth;
+	bool bInitializeHealth = false;
 	float HUDMaxHealth;
+	float HUDSheild;
+	bool bInitializeSheild = false;
+	float HUDMaxSheild;
 	float HUDScore;
+	bool bInitializeScore = false;
 	int32 HUDDefeats;
+	bool bInitializeDefeats = false;
+	float HUDCarriedAmmo;
+	bool bInitializeCarriedAmmo = false;
+	float HUDWeaponAmmo;
+	bool bInitializeWeaponAmmo = false;
+
+	//	Ping
+	void HighPingWarning();
+	void StopHighPingWarning();
+	void CheckPing(float DeltaTime);
+	float HighPingRunningTime = 0.f;
+	float PingAnimationRunningTime = 0.f;
+	float HighPingDuration = 5.f;
+	float CheckPingFrequency = 5.f;
+
+	UFUNCTION(Server, Reliable)
+	void ServerReportPingStatus(bool bHighPing);
+
+	float HighPingThreshold = 140.f;
+	//
+
+	// Return to MainMenu
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	class UInputAction* QuitAction;
+	void ShowReturnToMainMenu();
+
+	UPROPERTY(EditDefaultsOnly, Category = "HUD")
+	TSubclassOf<class UUserWidget> ReturnToMainMenuClass;
+
+	UPROPERTY()
+	class UReturnToMainMenu* ReturnToMainMenu;
+
+	bool bReturnToMainMenuOpen = false;
 };

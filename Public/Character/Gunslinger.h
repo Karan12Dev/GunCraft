@@ -11,8 +11,11 @@
 #include "GunslingerTypes/CombatState.h"
 #include "Gunslinger.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnLeftGame);
+
 class UInputAction;
 class UAnimMontage;
+class UBoxComponent;
 
 UCLASS()
 class GUNCRAFT_API AGunslinger : public ACharacter, public ICrosshairsInterface
@@ -21,23 +24,45 @@ class GUNCRAFT_API AGunslinger : public ACharacter, public ICrosshairsInterface
 
 public:
 	AGunslinger();
+	virtual void Destroyed() override;
 	virtual void Tick(float DeltaTime) override;
 	virtual void PossessedBy(AController* NewController) override; //Only called on Server
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+	virtual void OnRep_ReplicatedMovement() override;
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	virtual void PostInitializeComponents() override;
 	void PlayFireMontage(bool bAiming);
 	void PlayReloadMontage();
-	virtual void OnRep_ReplicatedMovement() override;
-	virtual void Destroyed() override;
+	void PlayThrowGrenadeMontage();
+	void PlaySwapWeaponMontage();
+	void UpdateHUDHealth();
+	void UpdateHUDSheild();
+	void UpdateHUDAmmo();
+
+	void Elim(bool bPlayerLeftGame);
 
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastElim();
-
-	void Elim();
+	void MulticastElim(bool bPlayerLeftGame);
 
 	UPROPERTY(Replicated)
 	bool bDisableGameplay = false;
+
+	UFUNCTION(BlueprintImplementableEvent)
+	void ShowSniperScopeWidget(bool bShowScope);
+
+	UPROPERTY()
+	TMap<FName, UBoxComponent*> HitCollisionBoxes;
+
+	UFUNCTION(Server, Reliable)
+	void ServerLeaveGame();
+
+	FOnLeftGame OnLeftGame;
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastGainedTheLead();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastLostTheLead();
 
 
 protected:
@@ -51,10 +76,64 @@ protected:
 
 	void PollInit();
 
+	//	Hit Boxes used for server side rewind
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* head;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* pelvis;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* spine_02;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* spine_03;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* upperarm_r;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* upperarm_l;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* lowerarm_r;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* lowerarm_l;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* hand_r;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* hand_l;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* backpack;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* blanket;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* thigh_r;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* thigh_l;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* calf_r;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* calf_l;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* foot_r;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Hit Box")
+	UBoxComponent* foot_l;
+
 
 private:
 	float CalculateSpeed();
-	void UpdateHUDHealth();
 	void SimProxiesTurn();
 	void PlayElimMontage();
 	void HideCameraIfCharacterClose();
@@ -68,8 +147,16 @@ private:
 	UPROPERTY()
 	class AGunslingerPlayerState* GunslingerPlayerState;
 
+	// Gunslinger Components
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	class UCombatComponent* Combat;
+
+	UPROPERTY(VisibleAnywhere)
+	class UBuffComponent* BuffComponent;
+
+	UPROPERTY(VisibleAnywhere)
+	class ULagCompensationComponent* LagCompensation;
+	//\\
 
 	UPROPERTY(VisibleAnywhere)
 	class USpringArmComponent* SpringArm;
@@ -132,6 +219,10 @@ private:
 	UInputAction* ReloadAction;
 	void Reload();
 
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	UInputAction* ThrowAction;
+	void Throw();
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = "UI")
 	class UWidgetComponent* OverHeadWidget;
 
@@ -160,6 +251,12 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat Anim")
 	UAnimMontage* ElimMontage;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Combat Anim")
+	UAnimMontage* ThrowGrenadeMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Combat Anim")
+	UAnimMontage* SwapWeaponMontage;
+
 	UPROPERTY(EditDefaultsOnly)
 	float CameraThreshold = 100.f;
 
@@ -170,17 +267,27 @@ private:
 	float ProxyYaw;
 	float TimeSinceLastMovementReplication;
 
-	//Health
+	//	Health
 	UPROPERTY(EditDefaultsOnly, Category = "Player Stats")
 	float MaxHealth = 100.f;
 
-	UPROPERTY(ReplicatedUsing = OnRep_Health, VisibleInstanceOnly, Category = "Player Stats")
-	float Health;
+	UPROPERTY(ReplicatedUsing = OnRep_Health, VisibleAnywhere, Category = "Player Stats")
+	float Health = 0.f;
 
 	UFUNCTION()
-	void OnRep_Health();
+	void OnRep_Health(float LastHealth);
 
-	//Elimination
+	//	Sheild
+	UPROPERTY(EditDefaultsOnly, Category = "Player Stats")
+	float MaxSheild = 100.f;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Sheild, VisibleAnywhere, Category = "Player Stats")
+	float Sheild = 0.f;
+
+	UFUNCTION()
+	void OnRep_Sheild(float LastSheild);
+
+	//	Elimination
 	bool bElimmed = false;
 
 	UPROPERTY(EditDefaultsOnly)
@@ -189,7 +296,9 @@ private:
 	FTimerHandle ElimTimer;
 	void ElimTimerFinished();
 
-	//Dissolve Effect
+	bool bLeftGame = false;
+
+	//	Dissolve Effect
 	UPROPERTY(VisibleDefaultsOnly, Category = "Elim")
 	UTimelineComponent* DissolveTimeline;
 
@@ -208,7 +317,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Elim")
 	UMaterialInstance* DissloveMaterialInstance;
 
-	//Elim Bot
+	//	Elim Effect
 	UPROPERTY(EditDefaultsOnly, Category = "Elim")
 	UParticleSystem* ElimBotEffect;
 
@@ -217,6 +326,25 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Elim")
 	class USoundBase* ElimBotSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "VFX")
+	class UNiagaraSystem* CrownSystem;
+
+	UPROPERTY()
+	class UNiagaraComponent* CrownComponent;
+
+	UPROPERTY(EditDefaultsOnly)
+	UStaticMeshComponent* AttachedGrenade;
+
+
+	//	Default Weapon
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	TSubclassOf<AGun> DefaultWeaponClass;
+
+	void SpawnDefaultWeapon();
+
+	FTimerHandle UpdateHUDTimer;
+	void UpdateHUD();
 
 
 public:
@@ -232,7 +360,16 @@ public:
 	FORCEINLINE bool ShouldRotateRootBone() const { return bRotateRootBone;	}
 	FORCEINLINE bool IsElimmed() const { return bElimmed; }
 	FORCEINLINE float GetHealth() const { return Health; }
+	FORCEINLINE void SetHealth(float HealAmount) { Health = FMath::Clamp(Health + HealAmount, 0, MaxHealth); }
 	FORCEINLINE float GetMaxHealth() const { return MaxHealth; }
+	FORCEINLINE float GetSheild() const { return Sheild; }
+	FORCEINLINE void SetSheild(float ReplenishAmmount) { Sheild = FMath::Clamp(Sheild + ReplenishAmmount, 0, MaxSheild); }
+	FORCEINLINE float GetMaxSheild() const { return MaxSheild; }
 	ECombatState GetCombatState() const;
 	FORCEINLINE UCombatComponent* GetCombat() const { return Combat; }
+	FORCEINLINE UAnimMontage* GetReloadMontage() const { return ReloadMontage; }
+	FORCEINLINE UStaticMeshComponent* GetAttachedGrenade() const { return AttachedGrenade; }
+	FORCEINLINE UBuffComponent* GetBuffComponent() const { return BuffComponent; }
+	bool IsLocallyReloading();
+	FORCEINLINE ULagCompensationComponent* GetLagCompensation() const { return LagCompensation; }
 };

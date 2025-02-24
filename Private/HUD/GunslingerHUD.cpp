@@ -4,6 +4,7 @@
 #include "HUD/GunslingerHUD.h"
 #include "HUD/CharacterOverlay.h"
 #include "HUD/Announcement.h"
+#include "HUD/ElimAnnouncement.h"
 
 
 void AGunslingerHUD::BeginPlay()
@@ -80,6 +81,20 @@ void AGunslingerHUD::AddAnnouncement()
 		if (Announcement)
 		{
 			Announcement->AddToViewport();
+		}
+	}
+}
+
+void AGunslingerHUD::AddElimAnnouncement(FString Attacker, FString Victim)
+{
+	OwningPlayer = OwningPlayer == nullptr ? GetOwningPlayerController() : OwningPlayer;
+	if (OwningPlayer && ElimAnnouncementClass)
+	{
+		UElimAnnouncement* ElimAnnouncementWidget = CreateWidget<UElimAnnouncement>(OwningPlayer, ElimAnnouncementClass);
+		if (ElimAnnouncementWidget)
+		{
+			ElimAnnouncementWidget->SetElimAnnouncementText(Attacker, Victim);
+			ElimAnnouncementWidget->AddToViewport();
 		}
 	}
 }

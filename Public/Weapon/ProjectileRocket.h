@@ -29,19 +29,6 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	class URocketMovementComponent* RocketMovementComponent;
 
-	UPROPERTY(VisibleAnywhere)
-	UStaticMeshComponent* RocketMesh;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Rocket")
-	class UNiagaraSystem* TrailSystem;
-
-	UPROPERTY()
-	class UNiagaraComponent* TrailSystemComponent;
-
-	FTimerHandle DestroyTimer;
-	void DestroyTimerFinished();
-	float DestroyTime = 2.5f;
-
 	UPROPERTY(EditDefaultsOnly, Category = "Rocket")
 	class USoundCue* ProjectileLoop;
 

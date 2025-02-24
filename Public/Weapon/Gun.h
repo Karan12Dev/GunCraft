@@ -13,9 +13,20 @@ enum class EWeaponState : uint8
 {
 	Initial UMETA(DisplayName = "Initial State"),
 	Equipped UMETA(DisplayName = "Equipped"),
+	EquippedSecondary UMETA(DisplayName = "Equipped Secondary"),
 	Dropped UMETA(DisplayName = "Dropped"),
 
 	MAX UMETA(DisplayeName = "DefaultMAX")
+};
+
+UENUM(BlueprintType)
+enum class EFireType : uint8
+{
+	HitScan UMETA(DisplayName = "Hit Scan Weapon"),
+	Projectile UMETA(DisplayName = "Projectile Weapon"),
+	Shotgun UMETA (DisplayName = "Shotgun Weapon"),
+
+	MAX UMETA(DisplayName = "Default MAX")
 };
 
 UCLASS()
@@ -57,18 +68,57 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
 	bool bAutomatic = true;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
 	class USoundCue* EquipSound;
+
+	//	Enable or Disable custom depth
+	void EnableCustomDepth(bool bEnable);
+
+	bool bDestroyWeapon = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	EFireType FireType;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	bool bUseScatter = false;
+
+	FVector TraceEndWithScatter(const FVector& HitTarget);
 
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void OnWeaponStateSet();
+	virtual void OnEquipped();
+	virtual void OnDropped();
+	virtual void OnEquippedSecondary();
 	
 	UFUNCTION()
 	virtual void OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
 	UFUNCTION()
 	virtual void OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
+	//	Trace end with scatter
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	float DistanceToSphere = 800.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	float SphereRadius = 75.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	float Damage = 20.f;
+
+	UPROPERTY(Replicated ,EditDefaultsOnly, Category = "Weapon")
+	bool bUseServerSideRewind = false;
+
+	UPROPERTY()
+	class AGunslinger* OwnerCharacter;
+
+	UPROPERTY()
+	class AGunslingerPlayerController* OwnerController;
+
+	UFUNCTION()
+	void OnPingTooHigh(bool bPingTooHigh);
 
 
 private:
@@ -89,7 +139,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
 	class UAnimationAsset* FireAnimation;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
 	TSubclassOf<class ACasing>	CasingClass;
 
 	//Zoomed FOV while aiming
@@ -99,24 +149,26 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
 	float ZoomInterpSpeed = 20.f;
 
-	UPROPERTY(ReplicatedUsing = OnRep_Ammo, EditAnywhere, Category = "Weapon")
+	UPROPERTY(EditAnywhere, Category = "Weapon")
 	int32 Ammo;
 
-	void SpendRound();
+	UFUNCTION(Client, Reliable)
+	void ClientUpdateAmmo(int32 ServerAmmo);
 
-	UFUNCTION()
-	void OnRep_Ammo();
+	UFUNCTION(Client, Reliable)
+	void ClientAddAmmo(int32 AmmoToAdd);
+
+	void SpendRound();
 
 	UPROPERTY(EditAnywhere, Category = "Weapon")
 	int32 MagCapacity;
 
-	UPROPERTY()
-	class AGunslinger* OwnerCharacter;
-	UPROPERTY()
-	class AGunslingerPlayerController* OwnerController;
-
 	UPROPERTY(EditDefaultsOnly)
 	EWeaponType WeaponType;
+
+	//	The number of unprocessed server requests for Ammo.
+	//	Incremented in SpendRound, decremented in ClientUpdateAmmo.
+	int32 Sequence = 0;
 
 
 public:
@@ -125,7 +177,9 @@ public:
 	FORCEINLINE float GetZoomedFOV() const { return ZoomedFOV; }
 	FORCEINLINE float GetZoomInterpSpeed() const { return ZoomInterpSpeed; }
 	bool IsEmpty();
+	bool IsFull();
 	FORCEINLINE EWeaponType GetWeaponType() const { return WeaponType; }
 	FORCEINLINE int32 GetAmmo() const { return Ammo; }
 	FORCEINLINE int32 GetMagCapacity() const { return MagCapacity; }
+	FORCEINLINE float GetDamage() const { return Damage; }
 };

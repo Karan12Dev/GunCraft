@@ -23,11 +23,36 @@ public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 	friend class AGunslinger;
 	void EquipGun(AGun* GunToEquip);
+	void SwapWeapons();
 
 	UFUNCTION(BlueprintCallable)
 	void FinishReloading();
 
+	UFUNCTION(BlueprintCallable)
+	void FinishSwap();
+
+	UFUNCTION(BlueprintCallable)
+	void FinishSwapAttachWeapons();
+
 	void FireButtonPressed(bool bPressed);
+
+	UFUNCTION(BlueprintCallable)
+	void ShotgunShellReload();
+
+	void JumpToShotgunEnd();
+
+	UFUNCTION(BlueprintCallable)
+	void ThrowGrenadeFinished();
+
+	UFUNCTION(BlueprintCallable)
+	void LaunchGrenade();
+
+	UFUNCTION(Server, Reliable)
+	void ServerLaunchGrenade(const FVector_NetQuantize& Target);
+
+	void PickupAmmo(EWeaponType WeaponType, int32 AmmoAmmount);
+
+	bool bLocallyReloading = false;
 
 
 protected:
@@ -40,13 +65,27 @@ protected:
 	UFUNCTION()
 	void OnRep_EquippedGun();
 
-	void Fire();
+	UFUNCTION()
+	void OnRep_SecondaryWeapon();
 
-	UFUNCTION(Server, Reliable)
-	void ServerFire(const FVector_NetQuantize& TraceHitTarget);
+	void Fire();
+	void FireProjectileWeapon();
+	void FireHitScanWeapon();
+	void FireShotgun();
+	void LocalFire(const FVector_NetQuantize& TraceHitTarget);
+	void ShotgunLocalFire(const TArray<FVector_NetQuantize>& TraceHitTargets);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerFire(const FVector_NetQuantize& TraceHitTarget, float FireDelay);
 
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastFire(const FVector_NetQuantize& TraceHitTarget);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerShotgunFire(const TArray<FVector_NetQuantize>& TraceHitTargets, float FireDelay);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastShotgunFire(const TArray<FVector_NetQuantize>& TraceHitTargets);
 
 	void TraceUnderCrosshairs(FHitResult& TraceHitResult);
 
@@ -59,6 +98,13 @@ protected:
 
 
 private:
+	void ThrowGrenade();
+	void AttachActorToSocket(AActor* ActorToAttach, FName SocketName);
+	void UpdateCarriedAmmoAndWeaponName();
+	void ShowAttachedGrenade(bool bShowGrenade);
+	void EquipPrimaryWeapon(AGun* WeaponToEquip);
+	void EquipSecondaryWeapon(AGun* WeaponToEquip);
+
 	UPROPERTY()
 	class AGunslinger* Character;
 
@@ -71,8 +117,16 @@ private:
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedGun)
 	AGun* EquippedGun;
 
-	UPROPERTY(Replicated)
-	bool bAiming;
+	UPROPERTY(ReplicatedUsing = OnRep_SecondaryWeapon)
+	AGun* SecondaryWeapon;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Aiming)
+	bool bAiming = false;
+
+	bool bAimButtonPressed = false;
+
+	UFUNCTION()
+	void OnRep_Aiming();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Combat")
 	float BaseWalkSpeed = 400.f;
@@ -119,21 +173,28 @@ private:
 	void Reload();
 	int32 AmountToReload();	
 	void UpdateAmmoValue();
+	void UpdateShotgunAmmoValues();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
-	int32 StartingARAmmo = 30;
+	int32 StartingARAmmo = 60;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
-	int32 StartingRocketAmmo = 4;
+	int32 StartingRocketAmmo = 8;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
-	int32 StartingPistolAmmo = 12;
+	int32 StartingPistolAmmo = 40;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
-	int32 StartingSMGAmmo = 24;
+	int32 StartingSMGAmmo = 80;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
-	int32 StartingShotgunAmmo = 0;
+	int32 StartingShotgunAmmo = 24;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	int32 StartingSniperRifleAmmo = 12;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	int32 StartingGrenadeLauncherAmmo = 10;
 
 	void InitializeCarriedAmmo();
 
@@ -142,4 +203,26 @@ private:
 
 	UFUNCTION()
 	void OnRep_CombatState();
+
+	UFUNCTION(Server, Reliable)
+	void ServerThrowGrenade();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	TSubclassOf<class AProjectile> GrenadeClass;
+
+	UPROPERTY(ReplicatedUsing = OnRep_Grenades)
+	int32 Grenades = 4;
+
+	UFUNCTION()
+	void OnRep_Grenades();
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	int32 MaxGrenades = 4;
+
+	void UpdateHUDGrenades();
+
+
+public:
+	FORCEINLINE int32 GetGrenades() const { return Grenades; }
+	bool ShouldSwapWeapons();
 };

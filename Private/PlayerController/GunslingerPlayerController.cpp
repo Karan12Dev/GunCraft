@@ -5,8 +5,10 @@
 #include "HUD/GunslingerHUD.h"
 #include "HUD/CharacterOverlay.h"
 #include "HUD/Announcement.h"
+#include "HUD/ReturnToMainMenu.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
+#include "Components/Image.h"
 #include "Character/Gunslinger.h"
 #include "Net/UnrealNetwork.h"
 #include "GameMode/GunslingerGameMode.h"
@@ -14,6 +16,7 @@
 #include "GunslingerComponents/CombatComponent.h"
 #include "GameState/GunslingerGameState.h"
 #include "PlayerState/GunslingerPlayerState.h"
+#include "EnhancedInputComponent.h"
 
 
 void AGunslingerPlayerController::BeginPlay()
@@ -24,14 +27,55 @@ void AGunslingerPlayerController::BeginPlay()
 	ServerCheckMatchState();
 }
 
+void AGunslingerPlayerController::SetupInputComponent()
+{
+	Super::SetupInputComponent();
+	
+	if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(InputComponent))
+	{
+		EnhancedInputComponent->BindAction(QuitAction, ETriggerEvent::Started, this, &ThisClass::ShowReturnToMainMenu);
+	}
+}
+
+void AGunslingerPlayerController::ShowReturnToMainMenu()
+{
+	if (ReturnToMainMenuClass == nullptr) return;
+	if (ReturnToMainMenu == nullptr)
+	{
+		ReturnToMainMenu = CreateWidget<UReturnToMainMenu>(this, ReturnToMainMenuClass);
+	}
+	if (ReturnToMainMenu)
+	{
+		bReturnToMainMenuOpen = !bReturnToMainMenuOpen;
+		if (bReturnToMainMenuOpen)
+		{
+			ReturnToMainMenu->MenuSetup();
+		}
+		else
+		{
+			ReturnToMainMenu->MenuTearDown();
+		}
+	}
+}
+
 void AGunslingerPlayerController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	SetHUDTime();
+	SetHUDTime();	
 	CheckTimeSync(DeltaTime);
 	PollInt();
+	CheckPing(DeltaTime);
 }
 
+void AGunslingerPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+	AGunslinger* Gunslinger = Cast<AGunslinger>(InPawn);
+	if (Gunslinger)
+	{
+		Gunslinger->UpdateHUDAmmo();
+	}
+}
 
 void AGunslingerPlayerController::PollInt()
 {
@@ -42,9 +86,18 @@ void AGunslingerPlayerController::PollInt()
 			CharacterOverlay = GunslingerHUD->CharacterOverlay;
 			if (CharacterOverlay)
 			{
-				SetHUDHealth(HUDHealth, HUDMaxHealth);
-				SetHUDScore(HUDScore);
-				SetHUDDefeats(HUDDefeats);
+				if (bInitializeHealth) SetHUDHealth(HUDHealth, HUDMaxHealth);
+				if (bInitializeSheild) SetHUDSheild(HUDSheild, HUDMaxSheild);
+				if (bInitializeScore) SetHUDScore(HUDScore);
+				if (bInitializeDefeats) SetHUDDefeats(HUDDefeats);
+				if (bInitializeCarriedAmmo) SetHUDCarriedAmmo(HUDCarriedAmmo);
+				if (bInitializeWeaponAmmo) SetHUDWeaponAmmo(HUDWeaponAmmo);
+
+				AGunslinger* Gunslinger = Cast<AGunslinger>(GetPawn());
+				if (Gunslinger && Gunslinger->GetCombat())
+				{
+					SetHUDGrenades(Gunslinger->GetCombat()->GetGrenades());
+				}
 			}
 		}
 	}
@@ -53,7 +106,7 @@ void AGunslingerPlayerController::PollInt()
 void AGunslingerPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
+		
 	DOREPLIFETIME(ThisClass, MatchState);
 }
 
@@ -69,9 +122,27 @@ void AGunslingerPlayerController::SetHUDHealth(float Health, float MaxHealth)
 	}
 	else
 	{
-		bInitializeCharacterOverlay = true;
+		bInitializeHealth = true;
 		HUDHealth = Health;
 		HUDMaxHealth = MaxHealth;
+	}
+}
+
+void AGunslingerPlayerController::SetHUDSheild(float Sheild, float MaxSheild)
+{
+	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->SheildBar && GunslingerHUD->CharacterOverlay->SheildText)
+	{
+		const float SheildPercent = Sheild / MaxSheild;
+		GunslingerHUD->CharacterOverlay->SheildBar->SetPercent(SheildPercent);
+		FString SheildText = FString::Printf(TEXT("%d"), FMath::CeilToInt(Sheild));
+		GunslingerHUD->CharacterOverlay->SheildText->SetText(FText::FromString(SheildText));
+	}
+	else
+	{
+		bInitializeSheild = true;
+		HUDSheild = Sheild;
+		HUDMaxSheild = MaxSheild;
 	}
 }
 
@@ -85,7 +156,7 @@ void AGunslingerPlayerController::SetHUDScore(float Score)
 	}
 	else
 	{
-		bInitializeCharacterOverlay = true;
+		bInitializeScore = true;
 		HUDScore = Score;
 	}
 }
@@ -100,7 +171,7 @@ void AGunslingerPlayerController::SetHUDDefeats(int32 Defeats)
 	}
 	else
 	{
-		bInitializeCharacterOverlay = true;
+		bInitializeDefeats = true;
 		HUDDefeats = Defeats;
 	}
 }
@@ -113,6 +184,11 @@ void AGunslingerPlayerController::SetHUDWeaponAmmo(int32 Ammo)
 		FString AmmoText = FString::Printf(TEXT("%d"), Ammo);
 		GunslingerHUD->CharacterOverlay->WeaponAmmoAmount->SetText(FText::FromString(AmmoText));
 	}
+	else
+	{
+		bInitializeWeaponAmmo = true;
+		HUDWeaponAmmo = Ammo;
+	}
 }
 
 void AGunslingerPlayerController::SetHUDCarriedAmmo(int32 CarriedAmmo)
@@ -122,6 +198,11 @@ void AGunslingerPlayerController::SetHUDCarriedAmmo(int32 CarriedAmmo)
 	{
 		FString CarriedAmmoText = FString::Printf(TEXT("%d"), CarriedAmmo);
 		GunslingerHUD->CharacterOverlay->CarriedAmmoAmount->SetText(FText::FromString(CarriedAmmoText));
+	}
+	else
+	{
+		bInitializeCarriedAmmo = true;
+		HUDCarriedAmmo = CarriedAmmo;
 	}
 }
 
@@ -170,6 +251,16 @@ void AGunslingerPlayerController::SetHUDAnnouncementCountDown(float CountDownTim
 	}
 }
 
+void AGunslingerPlayerController::SetHUDGrenades(int32 Grenades)
+{
+	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->GrenadesText)
+	{
+		FString GrenadesText = FString::Printf(TEXT("%d"), Grenades);
+		GunslingerHUD->CharacterOverlay->GrenadesText->SetText(FText::FromString(GrenadesText));
+	}
+}
+
 void AGunslingerPlayerController::ServerCheckMatchState_Implementation()
 {
 	AGunslingerGameMode* GameMode = Cast<AGunslingerGameMode>(UGameplayStatics::GetGameMode(this));
@@ -203,6 +294,44 @@ void AGunslingerPlayerController::ClientJoinMidGame_Implementation(FName StateOf
 	}
 }
 
+void AGunslingerPlayerController::BroadcastElim(APlayerState* Attacker, APlayerState* Victim)
+{
+	ClientElimAnnouncement(Attacker, Victim);
+}
+
+void AGunslingerPlayerController::ClientElimAnnouncement_Implementation(APlayerState* Attacker, APlayerState* Victim)
+{
+	APlayerState* Self = GetPlayerState<APlayerState>();
+	if (Attacker && Victim && Self)
+	{
+		GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+		if (GunslingerHUD)
+		{
+			if (Attacker == Self && Victim != Self)
+			{
+				GunslingerHUD->AddElimAnnouncement("You", Victim->GetPlayerName());
+				return;
+			}
+			if (Victim == Self && Attacker != Self)
+			{
+				GunslingerHUD->AddElimAnnouncement(Attacker->GetPlayerName(), "You");
+				return;
+			}
+			if (Attacker == Victim && Attacker == Self)
+			{
+				GunslingerHUD->AddElimAnnouncement("You", "yoursef");
+				return;
+			}
+			if (Attacker == Victim && Attacker != Self)
+			{
+				GunslingerHUD->AddElimAnnouncement(Attacker->GetPlayerName(), "themselves");
+				return;
+			}
+			GunslingerHUD->AddElimAnnouncement(Attacker->GetPlayerName(), Victim->GetPlayerName());
+		}
+	}
+}
+
 void AGunslingerPlayerController::CheckTimeSync(float DeltaTime)
 {
 	TimeSyncRunningTime += DeltaTime;
@@ -210,17 +339,6 @@ void AGunslingerPlayerController::CheckTimeSync(float DeltaTime)
 	{
 		ServerRequestServerTime(GetWorld()->GetTimeSeconds());
 		TimeSyncRunningTime = 0.f;
-	}
-}
-
-void AGunslingerPlayerController::OnPossess(APawn* InPawn)
-{
-	Super::OnPossess(InPawn);
-
-	AGunslinger* Gunslinger = Cast<AGunslinger>(InPawn);
-	if (Gunslinger)
-	{
-		SetHUDHealth(Gunslinger->GetHealth(), Gunslinger->GetMaxHealth());
 	}
 }
 
@@ -370,6 +488,67 @@ void AGunslingerPlayerController::ServerRequestServerTime_Implementation(float T
 void AGunslingerPlayerController::ClientReportServerTime_Implementation(float TimeofClientRequest, float TimeServerReceivedClient)
 {
 	float RoundTripTime = GetWorld()->GetTimeSeconds() - TimeofClientRequest;
-	float CurrentServerTime = TimeServerReceivedClient + (0.5f * RoundTripTime);
+	SingleTripTime = 0.5f * RoundTripTime;
+	float CurrentServerTime = TimeServerReceivedClient + SingleTripTime;
 	ClientServerDelta = CurrentServerTime - GetWorld()->GetTimeSeconds();
+}
+
+void AGunslingerPlayerController::CheckPing(float DeltaTime)
+{
+	HighPingRunningTime += DeltaTime;
+	if (HighPingRunningTime > CheckPingFrequency)
+	{
+		PlayerState = PlayerState == nullptr ? TObjectPtr<APlayerState>(GetPlayerState<APlayerState>()) : PlayerState;
+		if (PlayerState)
+		{
+			if (PlayerState->GetPingInMilliseconds() > HighPingThreshold)
+			{
+				HighPingWarning();
+				PingAnimationRunningTime = 0;
+				ServerReportPingStatus(true);
+			}
+			else
+			{
+				ServerReportPingStatus(false);
+			}
+		}
+		HighPingRunningTime = 0;
+	}
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->HighPingImageAnim && GunslingerHUD->CharacterOverlay->IsAnimationPlaying(GunslingerHUD->CharacterOverlay->HighPingImageAnim))
+	{
+		PingAnimationRunningTime += DeltaTime;
+		if (PingAnimationRunningTime > HighPingDuration)
+		{
+			StopHighPingWarning();
+		}
+	}
+}
+
+// Is the ping too high?
+void AGunslingerPlayerController::ServerReportPingStatus_Implementation(bool bHighPing)
+{
+	HighPingDelegate.Broadcast(bHighPing);
+}
+
+void AGunslingerPlayerController::HighPingWarning()
+{
+	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->HighPingImage && GunslingerHUD->CharacterOverlay->HighPingImageAnim)
+	{
+		GunslingerHUD->CharacterOverlay->HighPingImage->SetOpacity(1.f);
+		GunslingerHUD->CharacterOverlay->PlayAnimation(GunslingerHUD->CharacterOverlay->HighPingImageAnim, 0.f, 5);
+	}
+}
+
+void AGunslingerPlayerController::StopHighPingWarning()
+{
+	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->HighPingImage && GunslingerHUD->CharacterOverlay->HighPingImageAnim)
+	{
+		GunslingerHUD->CharacterOverlay->HighPingImage->SetOpacity(0.f);
+		if (GunslingerHUD->CharacterOverlay->IsAnimationPlaying(GunslingerHUD->CharacterOverlay->HighPingImageAnim))
+		{
+			GunslingerHUD->CharacterOverlay->StopAnimation(GunslingerHUD->CharacterOverlay->HighPingImageAnim);
+		}
+	}
 }

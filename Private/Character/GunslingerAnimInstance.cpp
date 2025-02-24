@@ -71,7 +71,11 @@ void UGunslingerAnimInstance::NativeUpdateAnimation(float DeltaTime)
 		}
 	}
 
-	bUseFABRIK = Gunslinger->GetCombatState() != ECombatState::Reloading;
-	bUseAimOffsets = Gunslinger->GetCombatState() != ECombatState::Reloading && !Gunslinger->bDisableGameplay;
-	bTransformRightHand = Gunslinger->GetCombatState() != ECombatState::Reloading && !Gunslinger->bDisableGameplay;
+	bUseFABRIK = Gunslinger->GetCombatState() == ECombatState::Unoccuiped;
+	if (Gunslinger->IsLocallyControlled() && Gunslinger->GetCombatState() != ECombatState::ThrowingGrenade && Gunslinger->GetCombatState() != ECombatState::SwappingWeapon)
+	{
+		bUseFABRIK = !Gunslinger->IsLocallyReloading();
+	}
+	bUseAimOffsets = Gunslinger->GetCombatState() == ECombatState::Unoccuiped && !Gunslinger->bDisableGameplay;
+	bTransformRightHand = Gunslinger->GetCombatState() == ECombatState::Unoccuiped && !Gunslinger->bDisableGameplay;
 }

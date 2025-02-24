@@ -39,13 +39,14 @@ public:
 
 	void AddCharacterOverlay();
 
-	UPROPERTY(EditDefaultsOnly, Category = "AnnouncementClass")
+	UPROPERTY(EditDefaultsOnly, Category = "Announcement")
 	TSubclassOf<class UUserWidget> AnnouncementClass;
 
 	UPROPERTY()
 	class UAnnouncement* Announcement;
 
 	void AddAnnouncement();
+	void AddElimAnnouncement(FString Attacker, FString Victim);
 
 
 protected:
@@ -53,11 +54,17 @@ protected:
 	
 
 private:
+	UPROPERTY()
+	class APlayerController* OwningPlayer;
+
 	FHUDPackage HUDPackage;
 	void DrawCrosshair(UTexture2D* Texture, FVector2D ViewportCenter, FVector2D Spread, FLinearColor CrosshairColor);
 
 	UPROPERTY(EditDefaultsOnly)
 	float CrosshairSpreadMax = 16.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Announcement"	)
+	TSubclassOf<class UElimAnnouncement> ElimAnnouncementClass;
 
 
 public:

@@ -7,7 +7,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Particles/ParticleSystemComponent.h"
 #include "Sound/SoundCue.h"
-#include "Kismet/KismetMathLibrary.h"
+#include "GunslingerComponents/LagCompensationComponent.h"
+#include "PlayerController/GunslingerPlayerController.h"
 
 
 void AHitScanWeapon::Fire(const FVector& HitTarget)
@@ -23,47 +24,34 @@ void AHitScanWeapon::Fire(const FVector& HitTarget)
 	{
 		FTransform SocketTransform = MuzzleFlashSocket->GetSocketTransform(GetGunMesh());
 		FVector Start = SocketTransform.GetLocation();
-		FVector End = Start + (HitTarget - Start) * 1.25f;
-
 		FHitResult FireHit;
-		if (UWorld* World = GetWorld())
+		WeaponTraceHit(Start, HitTarget, FireHit);
+
+		AGunslinger* Gunslinger = Cast<AGunslinger>(FireHit.GetActor());
+		if (Gunslinger && InstigatorController)
 		{
-			World->LineTraceSingleByChannel(
-				FireHit,
-				Start,
-				End,
-				ECollisionChannel::ECC_Visibility
-			);
-			FVector BeamEnd = End;
-			if (FireHit.bBlockingHit)
+			bool bCauseAuthDamage = !bUseServerSideRewind || OwnerPawn->IsLocallyControlled();
+			if (HasAuthority() && bCauseAuthDamage)
 			{
-				BeamEnd = FireHit.ImpactPoint;
-				AGunslinger* Gunslinger = Cast<AGunslinger>(FireHit.GetActor());
-				if (Gunslinger && HasAuthority() && InstigatorController)
+				UGameplayStatics::ApplyDamage(Gunslinger, Damage, InstigatorController, this, UDamageType::StaticClass());
+			}
+			if (!HasAuthority() && bUseServerSideRewind)
+			{
+				OwnerCharacter = OwnerCharacter == nullptr ? Cast<AGunslinger>(OwnerPawn) : OwnerCharacter;
+				OwnerController = OwnerController == nullptr ? Cast<AGunslingerPlayerController>(InstigatorController) : OwnerController;
+				if (OwnerCharacter && OwnerController && OwnerCharacter->GetLagCompensation() && OwnerCharacter->IsLocallyControlled())
 				{
-					UGameplayStatics::ApplyDamage(Gunslinger, Damage, InstigatorController, this, UDamageType::StaticClass());
-				}
-				if (ImpactParticle)
-				{
-					UGameplayStatics::SpawnEmitterAtLocation(World, ImpactParticle, FireHit.ImpactPoint, FireHit.ImpactNormal.Rotation());
-				}
-				if (HitSound)
-				{
-					UGameplayStatics::PlaySoundAtLocation(this, HitSound, FireHit.ImpactPoint);
+					OwnerCharacter->GetLagCompensation()->ServerScoreRequest(Gunslinger, Start, HitTarget, OwnerController->GetServerTime() - OwnerController->SingleTripTime, this);
 				}
 			}
-			else if (!FireHit.bBlockingHit)
-			{
-				FireHit.ImpactPoint = End;
-			}
-			if (BeamParticles)
-			{
-				UParticleSystemComponent* Beam = UGameplayStatics::SpawnEmitterAtLocation(World, BeamParticles, SocketTransform);
-				if (Beam)
-				{
-					Beam->SetVectorParameter(FName("Target"), BeamEnd);
-				}
-			}
+		}
+		if (ImpactParticle)
+		{
+			UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactParticle, FireHit.ImpactPoint, FireHit.ImpactNormal.Rotation());
+		}
+		if (HitSound)
+		{
+			UGameplayStatics::PlaySoundAtLocation(this, HitSound, FireHit.ImpactPoint);
 		}
 		if (MuzzleFlash)
 		{
@@ -76,17 +64,25 @@ void AHitScanWeapon::Fire(const FVector& HitTarget)
 	}
 }
 
-FVector AHitScanWeapon::TraceEndWithScatter(const FVector& TraceStart, const FVector& HitTarget)
+void AHitScanWeapon::WeaponTraceHit(const FVector& TraceStart, const FVector& HitTarget, FHitResult& OutHit)
 {
-	FVector ToTargetNormalized = (HitTarget - TraceStart).GetSafeNormal();
-	FVector SphereCenter = TraceStart + ToTargetNormalized * DistanceToSphere;
-	FVector RandVec = UKismetMathLibrary::RandomUnitVector() * FMath::FRandRange(0.f, SphereRadius);
-	FVector EndLoc = SphereCenter + RandVec;
-	FVector ToEndLoc = EndLoc - TraceStart;
-
-	DrawDebugSphere(GetWorld(), SphereCenter, SphereRadius, 12, FColor::Red, false, 5.f);
-	DrawDebugSphere(GetWorld(), EndLoc, 3.f, 12, FColor::Green, false, 5.f);
-	DrawDebugLine(GetWorld(), TraceStart, TraceStart + ToEndLoc * TRACE_LENGTH / ToEndLoc.Size(), FColor::Red, false, 5.f);
-
-	return FVector(TraceStart + ToEndLoc * TRACE_LENGTH / ToEndLoc.Size());
+	if (UWorld* World = GetWorld())
+	{
+		FVector End = TraceStart + (HitTarget - TraceStart) * 1.25f;
+		World->LineTraceSingleByChannel(OutHit, TraceStart, End, ECollisionChannel::ECC_Visibility);
+		FVector BeamEnd = End;
+		if (OutHit.bBlockingHit)
+		{
+			BeamEnd = OutHit.ImpactPoint;
+		}
+		if (BeamParticles)
+		{
+			UParticleSystemComponent* Beam = UGameplayStatics::SpawnEmitterAtLocation(World, BeamParticles, TraceStart, FRotator::ZeroRotator, true);
+			if (Beam)
+			{
+				Beam->SetVectorParameter(FName("Target"), BeamEnd);
+			}
+		}
+	}
 }
+

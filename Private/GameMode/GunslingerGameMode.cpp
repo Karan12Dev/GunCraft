@@ -72,21 +72,56 @@ void AGunslingerGameMode::OnMatchStateSet()
 
 void AGunslingerGameMode::PlayerEliminated(AGunslinger* ElimmedCharacter, AGunslingerPlayerController* VictimController, AGunslingerPlayerController* AttackerController)
 {
+	if (AttackerController == nullptr || AttackerController->PlayerState == nullptr) return;
+	if (VictimController == nullptr || VictimController->PlayerState == nullptr) return;
 	AGunslingerPlayerState* AttackerPlayerState = AttackerController ? Cast<AGunslingerPlayerState>(AttackerController->PlayerState) : nullptr;
 	AGunslingerPlayerState* VictimPlayerState = VictimController ? Cast<AGunslingerPlayerState>(VictimController->PlayerState) : nullptr;
 
 	AGunslingerGameState* GunslingerGameState = GetGameState<AGunslingerGameState>();
 	if (AttackerPlayerState && AttackerPlayerState != VictimPlayerState && GunslingerGameState)
 	{
+		TArray<AGunslingerPlayerState*> PlayersCurrentlyInTheLead;
+		for (auto LeadPlayer : GunslingerGameState->TopScoringPlayers)
+		{
+			PlayersCurrentlyInTheLead.Add(LeadPlayer);
+		}
 		AttackerPlayerState->AddToScore(1.f);
 		GunslingerGameState->UpdateTopScore(AttackerPlayerState);
+		if (GunslingerGameState->TopScoringPlayers.Contains(AttackerPlayerState))
+		{
+			if (AGunslinger* Leader = Cast<AGunslinger>(AttackerPlayerState->GetPawn()))
+			{
+				Leader->MulticastGainedTheLead();
+			}
+		}
+
+		for (int32 i = 0; i < PlayersCurrentlyInTheLead.Num(); i++)
+		{
+			if (!GunslingerGameState->TopScoringPlayers.Contains(PlayersCurrentlyInTheLead[i]))
+			{
+				if (AGunslinger* Loser = Cast<AGunslinger>(PlayersCurrentlyInTheLead[i]->GetPawn()))
+				{
+					Loser->MulticastLostTheLead();
+				}
+
+			}
+		}
 	}
 	if (ElimmedCharacter)
 	{
-		ElimmedCharacter->Elim();
+		ElimmedCharacter->Elim(false);
 		if (VictimPlayerState)
 		{
 			VictimPlayerState->AddToDefeats(1);
+		}
+	}
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		AGunslingerPlayerController* GunslingerController = Cast<AGunslingerPlayerController>(*It);
+		if (GunslingerController && AttackerPlayerState && VictimPlayerState)
+		{
+			GunslingerController->BroadcastElim(AttackerPlayerState, VictimPlayerState);
 		}
 	}
 }
@@ -107,5 +142,21 @@ void AGunslingerGameMode::RequestRespawn(ACharacter* ElimmedCharacter, AControll
 			int32 Selection = FMath::RandRange(0, PlayerStarts.Num() - 1);
 			RestartPlayerAtPlayerStart(ElimmedController, PlayerStarts[Selection]);
 		}
+	}
+}
+
+void AGunslingerGameMode::PlayerLeftGame(AGunslingerPlayerState* PlayerLeaving)
+{
+	if (PlayerLeaving == nullptr) return;
+
+	AGunslingerGameState* GunslingerGameState = GetGameState<AGunslingerGameState>();
+	if (GunslingerGameState && GunslingerGameState->TopScoringPlayers.Contains(PlayerLeaving))
+	{
+		GunslingerGameState->TopScoringPlayers.Remove(PlayerLeaving);
+	}
+	AGunslinger* GunslingerLeaving = Cast<AGunslinger>(PlayerLeaving->GetPawn());
+	if (GunslingerLeaving)
+	{
+		GunslingerLeaving->Elim(true);
 	}
 }
