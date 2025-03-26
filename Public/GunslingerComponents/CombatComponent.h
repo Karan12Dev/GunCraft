@@ -31,7 +31,7 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void FinishSwap();
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(Server, Reliable, BlueprintCallable)
 	void FinishSwapAttachWeapons();
 
 	void FireButtonPressed(bool bPressed);
@@ -220,6 +220,16 @@ private:
 	int32 MaxGrenades = 4;
 
 	void UpdateHUDGrenades();
+
+	//	Flag
+	UPROPERTY(ReplicatedUsing = OnRep_HoldingFlag)
+	bool bHoldingFlag = false;
+
+	UFUNCTION()
+	void OnRep_HoldingFlag();
+
+	UPROPERTY()
+	AGun* TheFlag;
 
 
 public:

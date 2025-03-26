@@ -9,14 +9,16 @@
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
+#include "Components/BackgroundBlur.h"
 #include "Character/Gunslinger.h"
-#include "Net/UnrealNetwork.h"
-#include "GameMode/GunslingerGameMode.h"
-#include "Kismet/GameplayStatics.h"
 #include "GunslingerComponents/CombatComponent.h"
+#include "GameMode/GunslingerGameMode.h"
 #include "GameState/GunslingerGameState.h"
 #include "PlayerState/GunslingerPlayerState.h"
+#include "Net/UnrealNetwork.h"
+#include "Kismet/GameplayStatics.h"
 #include "EnhancedInputComponent.h"
+#include "GunslingerTypes/Announcement.h"
 
 
 void AGunslingerPlayerController::BeginPlay()
@@ -108,6 +110,7 @@ void AGunslingerPlayerController::GetLifetimeReplicatedProps(TArray<FLifetimePro
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 		
 	DOREPLIFETIME(ThisClass, MatchState);
+	DOREPLIFETIME(ThisClass, bShowTeamScores);
 }
 
 void AGunslingerPlayerController::SetHUDHealth(float Health, float MaxHealth)
@@ -261,6 +264,44 @@ void AGunslingerPlayerController::SetHUDGrenades(int32 Grenades)
 	}
 }
 
+void AGunslingerPlayerController::HideTeamScore()
+{
+	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->TeamScoreBox)
+	{
+		GunslingerHUD->CharacterOverlay->TeamScoreBox->SetVisibility(ESlateVisibility::Hidden);
+	}
+}
+
+void AGunslingerPlayerController::InitTeamScores()
+{
+	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->BlueTeamScore && GunslingerHUD->CharacterOverlay->RedTeamScore && GunslingerHUD->CharacterOverlay->TeamScoreBox)
+	{
+		GunslingerHUD->CharacterOverlay->TeamScoreBox->SetVisibility(ESlateVisibility::Visible);
+		GunslingerHUD->CharacterOverlay->BlueTeamScore->SetText(FText::FromString("0"));
+		GunslingerHUD->CharacterOverlay->RedTeamScore->SetText(FText::FromString("0"));
+	}
+}
+
+void AGunslingerPlayerController::SetHUDBlueTeamScore(int32 BlueScore)
+{
+	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->BlueTeamScore)
+	{
+		GunslingerHUD->CharacterOverlay->BlueTeamScore->SetText(FText::FromString(FString::FromInt(BlueScore)));
+	}
+}
+
+void AGunslingerPlayerController::SetHUDRedTeamScore(int32 RedScore)
+{
+	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
+	if (GunslingerHUD && GunslingerHUD->CharacterOverlay && GunslingerHUD->CharacterOverlay->RedTeamScore)
+	{
+		GunslingerHUD->CharacterOverlay->RedTeamScore->SetText(FText::FromString(FString::FromInt(RedScore)));
+	}
+}
+
 void AGunslingerPlayerController::ServerCheckMatchState_Implementation()
 {
 	AGunslingerGameMode* GameMode = Cast<AGunslingerGameMode>(UGameplayStatics::GetGameMode(this));
@@ -352,13 +393,13 @@ void AGunslingerPlayerController::ReceivedPlayer()
 	}
 }
 
-void AGunslingerPlayerController::OnMatchStateSet(FName State)
+void AGunslingerPlayerController::OnMatchStateSet(FName State, bool bTeamsMatch)
 {
 	MatchState = State;
 
 	if (MatchState == MatchState::InProgress)
 	{
-		HandleMatchHasStarted();
+		HandleMatchHasStarted(bTeamsMatch);
 	}
 	else if (MatchState == MatchState::Cooldown)
 	{
@@ -378,17 +419,38 @@ void AGunslingerPlayerController::OnRep_MatchState()
 	}
 }
 
-void AGunslingerPlayerController::HandleMatchHasStarted()
+void AGunslingerPlayerController::HandleMatchHasStarted(bool bTeamsMatch)
 {
+	if (HasAuthority()) bShowTeamScores = bTeamsMatch;
 	GunslingerHUD = GunslingerHUD == nullptr ? Cast<AGunslingerHUD>(GetHUD()) : GunslingerHUD;
 	if (GunslingerHUD)
 	{
-
 		if (GunslingerHUD->CharacterOverlay == nullptr) GunslingerHUD->AddCharacterOverlay();
 		if (GunslingerHUD->Announcement)
 		{
 			GunslingerHUD->Announcement->SetVisibility(ESlateVisibility::Hidden);
 		}
+		if (!HasAuthority()) return;
+		if (bTeamsMatch)
+		{
+			InitTeamScores();
+		}
+		else
+		{
+			HideTeamScore();
+		}
+	}
+}
+
+void AGunslingerPlayerController::OnRep_ShowTeamScores()
+{
+	if (bShowTeamScores)
+	{
+		InitTeamScores();
+	}
+	else
+	{
+		HideTeamScore();
 	}
 }
 
@@ -401,35 +463,15 @@ void AGunslingerPlayerController::HandleCooldown()
 		if (GunslingerHUD->Announcement && GunslingerHUD->Announcement->AnnouncementText && GunslingerHUD->Announcement->InfoText)
 		{
 			GunslingerHUD->Announcement->SetVisibility(ESlateVisibility::Visible);
-			FString AnnouncementText("New Match Starts In:");
+			FString AnnouncementText = Announcement::NewMatchStartsIn;
 			GunslingerHUD->Announcement->AnnouncementText->SetText(FText::FromString(AnnouncementText));
 
 			AGunslingerGameState* GunslingerGameState = Cast<AGunslingerGameState>(UGameplayStatics::GetGameState(this));
 			AGunslingerPlayerState* GunslingerPlayerState = GetPlayerState<AGunslingerPlayerState>();
-			if (GunslingerGameState && GunslingerGameState)
+			if (GunslingerGameState && GunslingerPlayerState)
 			{
 				TArray<AGunslingerPlayerState*> TopPlayers = GunslingerGameState->TopScoringPlayers;
-				FString InfoTextString;
-				if (TopPlayers.Num() == 0)
-				{
-					InfoTextString = FString("There is no Winner.");
-				}
-				else if (TopPlayers.Num() == 1 && TopPlayers[0] == GunslingerPlayerState)
-				{
-					InfoTextString = FString("You are the Winner.");
-				}
-				else if (TopPlayers.Num() == 1)
-				{
-					InfoTextString = FString::Printf(TEXT("Winner: \n%s"), *TopPlayers[0]->GetPlayerName());
-				}
-				else if (TopPlayers.Num() > 1)
-				{
-					InfoTextString = FString("Players tied for the win:\n");
-					for (auto TiedPlayer : TopPlayers)
-					{
-						InfoTextString.Append(FString::Printf(TEXT("%s/n"), *TiedPlayer->GetPlayerName()));
-					}
-				}
+				FString InfoTextString = bShowTeamScores ? GetTeamsInfoText(GunslingerGameState) : GetInfoText(TopPlayers);
 				GunslingerHUD->Announcement->InfoText->SetText(FText::FromString(InfoTextString)); 
 			}
 		}
@@ -440,6 +482,76 @@ void AGunslingerPlayerController::HandleCooldown()
 		Gunslinger->bDisableGameplay = true;
 		Gunslinger->GetCombat()->FireButtonPressed(false);
 	}
+}
+
+FString AGunslingerPlayerController::GetInfoText(const TArray<class AGunslingerPlayerState*>& Players)
+{
+	AGunslingerPlayerState* GunslingerPlayerState = GetPlayerState<AGunslingerPlayerState>();
+	if (GunslingerPlayerState == nullptr) return FString();
+	FString InfoTextString;
+	if (Players.Num() == 0)
+	{
+		InfoTextString = Announcement::ThereIsNoWinner;
+	}
+	else if (Players.Num() == 1 && Players[0] == GunslingerPlayerState)
+	{
+		InfoTextString = Announcement::YouAreTheWinner;
+	}
+	else if (Players.Num() == 1)
+	{
+		InfoTextString = FString::Printf(TEXT("Winner: \n%s"), *Players[0]->GetPlayerName());
+	}
+	else if (Players.Num() > 1)
+	{
+		InfoTextString = Announcement::PlayersTiedForTheWin;
+		InfoTextString.Append(FString("\n"));
+		for (auto TiedPlayer : Players)
+		{
+			InfoTextString.Append(FString::Printf(TEXT("%s\n"), *TiedPlayer->GetPlayerName()));
+		}
+	}
+
+	return InfoTextString;
+}
+
+FString AGunslingerPlayerController::GetTeamsInfoText(AGunslingerGameState* GunslingerGameState)
+{
+	if (GunslingerGameState == nullptr) return FString();
+	FString InfoTextString;
+
+	const int32 RedTeamScore = GunslingerGameState->RedTeamScore;
+	const int32 BlueTeamScore = GunslingerGameState->BlueTeamScore;
+
+	if (RedTeamScore == 0 && BlueTeamScore == 0)
+	{
+		InfoTextString = Announcement::ThereIsNoWinner;
+	}
+	else if (RedTeamScore == BlueTeamScore)
+	{
+		InfoTextString = FString::Printf(TEXT("%s\n"), *Announcement::TeamsTiedForTheWin);
+		InfoTextString.Append(Announcement::RedTeam);
+		InfoTextString.Append(FString("\n"));
+		InfoTextString.Append(Announcement::BlueTeam);
+		InfoTextString.Append(FString("\n"));
+	}
+	else if (RedTeamScore > BlueTeamScore)
+	{
+		InfoTextString = Announcement::RedTeam;
+		InfoTextString.Append(" Wins!");
+		InfoTextString.Append(FString("\n"));
+		InfoTextString.Append(FString::Printf(TEXT("%s: %d\n"), *Announcement::RedTeam, RedTeamScore));
+		InfoTextString.Append(FString::Printf(TEXT("%s: %d"), *Announcement::BlueTeam, BlueTeamScore));
+	}
+	else if (BlueTeamScore > RedTeamScore)
+	{
+		InfoTextString = Announcement::BlueTeam;
+		InfoTextString.Append(" Wins!");
+		InfoTextString.Append(FString("\n"));
+		InfoTextString.Append(FString::Printf(TEXT("%s: %d\n"), *Announcement::BlueTeam, BlueTeamScore));
+		InfoTextString.Append(FString::Printf(TEXT("%s: %d"), *Announcement::RedTeam, RedTeamScore));
+	}
+
+	return InfoTextString;
 }
 
 float AGunslingerPlayerController::GetServerTime()
@@ -459,6 +571,11 @@ void AGunslingerPlayerController::SetHUDTime()
 
 	if (HasAuthority())
 	{
+		if (GunslingerGameMode == nullptr)
+		{
+			GunslingerGameMode = Cast<AGunslingerGameMode>(UGameplayStatics::GetGameMode(this));
+			LevelStartingTime = GunslingerGameMode->LevelStartingTime;
+		}
 		GunslingerGameMode = GunslingerGameMode == nullptr ? Cast<AGunslingerGameMode>(UGameplayStatics::GetGameMode(this)) : GunslingerGameMode;
 		if (GunslingerGameMode)
 		{

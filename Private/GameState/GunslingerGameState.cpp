@@ -4,6 +4,7 @@
 #include "GameState/GunslingerGameState.h"
 #include "Net/UnrealNetwork.h"
 #include "PlayerState/GunslingerPlayerState.h"
+#include "PlayerController/GunslingerPlayerController.h"
 
 
 void AGunslingerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -11,6 +12,8 @@ void AGunslingerGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>&
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ThisClass, TopScoringPlayers);
+	DOREPLIFETIME(ThisClass, RedTeamScore);
+	DOREPLIFETIME(ThisClass, BlueTeamScore);
 }
 
 void AGunslingerGameState::UpdateTopScore(AGunslingerPlayerState* ScoringPlayer)
@@ -29,5 +32,43 @@ void AGunslingerGameState::UpdateTopScore(AGunslingerPlayerState* ScoringPlayer)
 		TopScoringPlayers.Empty();
 		TopScoringPlayers.AddUnique(ScoringPlayer);
 		TopScore = ScoringPlayer->GetScore();
+	}
+}
+
+void AGunslingerGameState::RedTeamScores()
+{
+	++RedTeamScore;
+	AGunslingerPlayerController* GunslingerController = Cast<AGunslingerPlayerController>(GetWorld()->GetFirstPlayerController());
+	if (GunslingerController)
+	{
+		GunslingerController->SetHUDRedTeamScore(RedTeamScore);
+	}
+}
+
+void AGunslingerGameState::BlueTeamScores()
+{
+	++BlueTeamScore;
+	AGunslingerPlayerController* GunslingerController = Cast<AGunslingerPlayerController>(GetWorld()->GetFirstPlayerController());
+	if (GunslingerController)
+	{
+		GunslingerController->SetHUDBlueTeamScore(BlueTeamScore);
+	}
+}
+
+void AGunslingerGameState::OnRep_RedTeamScore()
+{
+	AGunslingerPlayerController* GunslingerController = Cast<AGunslingerPlayerController>(GetWorld()->GetFirstPlayerController());
+	if (GunslingerController)
+	{
+		GunslingerController->SetHUDRedTeamScore(RedTeamScore);
+	}
+}
+
+void AGunslingerGameState::OnRep_BlueTeamScore()
+{
+	AGunslingerPlayerController* GunslingerController = Cast<AGunslingerPlayerController>(GetWorld()->GetFirstPlayerController());
+	if (GunslingerController)
+	{
+		GunslingerController->SetHUDBlueTeamScore(BlueTeamScore);
 	}
 }

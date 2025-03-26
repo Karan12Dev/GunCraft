@@ -28,6 +28,8 @@
 #include "GunslingerComponents/LagCompensationComponent.h"
 #include "NiagaraComponent.h"
 #include "NiagaraFunctionLibrary.h"
+#include "PlayerStart/TeamPlayerStart.h"
+#include "Components/ArrowComponent.h"
 
 
 AGunslinger::AGunslinger()
@@ -178,6 +180,7 @@ void AGunslinger::BeginPlay()
 	{
 		AttachedGrenade->SetVisibility(false);
 	}
+	InitialMaxRunningSpeed = MaxRunningSpeed;
 }
 
 void AGunslinger::InitializeInput()
@@ -194,7 +197,7 @@ void AGunslinger::InitializeInput()
 
 void AGunslinger::SpawnDefaultWeapon()
 {
-	AGunslingerGameMode* GunslingerGameMode = Cast<AGunslingerGameMode>(UGameplayStatics::GetGameMode(this));
+	GunslingerGameMode = GunslingerGameMode == nullptr ? GetWorld()->GetAuthGameMode<AGunslingerGameMode>() : GunslingerGameMode;
 	UWorld* World = GetWorld();
 	if (GunslingerGameMode && World && !bElimmed && DefaultWeaponClass && Combat)
 	{
@@ -209,7 +212,7 @@ void AGunslinger::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	RotateInPlace(DeltaTime);
-	HideCameraIfCharacterClose();
+	HideCharacterIfCameraClose();
 	PollInit();
 }
 
@@ -220,9 +223,7 @@ void AGunslinger::PollInit()
 		GunslingerPlayerState = GetPlayerState<AGunslingerPlayerState>();
 		if (GunslingerPlayerState)
 		{
-			GunslingerPlayerState->AddToScore(0.f);
-			GunslingerPlayerState->AddToDefeats(0);
-
+			OnPlayerStateInitialized();
 			if (AGunslingerGameState* GunslingerGameState = Cast<AGunslingerGameState>(UGameplayStatics::GetGameState(this)))
 			{
 				if (GunslingerGameState->TopScoringPlayers.Contains(GunslingerPlayerState))
@@ -287,7 +288,7 @@ void AGunslinger::Destroyed()
 		ElimBotComponent->DestroyComponent();
 	}
 
-	AGunslingerGameMode* GunslingerGameMode = Cast<AGunslingerGameMode>(UGameplayStatics::GetGameMode(this));
+	GunslingerGameMode = GunslingerGameMode == nullptr ? GetWorld()->GetAuthGameMode<AGunslingerGameMode>() : GunslingerGameMode;
 	bool bMatchNotInProgress = GunslingerGameMode && GunslingerGameMode->GetMatchState() != MatchState::InProgress;
 	if (Combat && Combat->EquippedGun && bMatchNotInProgress)
 	{
@@ -350,6 +351,10 @@ void AGunslinger::Elim(bool bPlayerLeftGame)
 				Combat->SecondaryWeapon->Dropped();
 			}
 		}
+		if (Combat->TheFlag)
+		{
+			Combat->TheFlag->Dropped();
+		}
 		
 	}
 	MulticastElim(bPlayerLeftGame);
@@ -384,6 +389,7 @@ void AGunslinger::MulticastElim_Implementation(bool bPlayerLeftGame)
 	bDisableGameplay = true;
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	GetMesh()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	AttachedGrenade->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	//Spawn Elim Bot
 	if (ElimBotEffect)
@@ -418,7 +424,7 @@ void AGunslinger::PlayElimMontage()
 
 void AGunslinger::ElimTimerFinished()
 {
-	AGunslingerGameMode* GunslingerGameMode = GetWorld()->GetAuthGameMode<AGunslingerGameMode>();
+	GunslingerGameMode = GunslingerGameMode == nullptr ? GetWorld()->GetAuthGameMode<AGunslingerGameMode>() : GunslingerGameMode;
 	if (GunslingerGameMode && !bLeftGame)
 	{
 		GunslingerGameMode->RequestRespawn(this, GetController());
@@ -431,12 +437,35 @@ void AGunslinger::ElimTimerFinished()
 
 void AGunslinger::ServerLeaveGame_Implementation()
 {
-	AGunslingerGameMode* GunslingerGameMode = GetWorld()->GetAuthGameMode<AGunslingerGameMode>();
+	GunslingerGameMode = GunslingerGameMode == nullptr ? GetWorld()->GetAuthGameMode<AGunslingerGameMode>() : GunslingerGameMode;
 	GunslingerPlayerState = GunslingerPlayerState == nullptr ? GetPlayerState<AGunslingerPlayerState>() : GunslingerPlayerState;
 	if (GunslingerGameMode && GunslingerPlayerState)
 	{
 		GunslingerGameMode->PlayerLeftGame(GunslingerPlayerState);
 
+	}
+}
+
+void AGunslinger::SetTeamColor(ETeam Team)
+{
+	if (GetMesh() == nullptr) return;
+
+	switch (Team)
+	{
+	case ETeam::RedTeam:
+		if (RedMaterial) GetMesh()->SetMaterial(0, RedMaterial);
+		if (RedDissloveMatInst) DissloveMaterialInstance = RedDissloveMatInst;
+		break;
+
+	case ETeam::BlueTeam:
+		if (BlueMaterial) GetMesh()->SetMaterial(0, BlueMaterial);
+		if (BlueDissloveMatInst) DissloveMaterialInstance = BlueDissloveMatInst;
+		break;
+
+	case ETeam::NoTeam:
+		if (OriginalMaterial) GetMesh()->SetMaterial(0, OriginalMaterial);
+		if (BlueDissloveMatInst) DissloveMaterialInstance = BlueDissloveMatInst;
+		break;
 	}
 }
 
@@ -571,6 +600,18 @@ void AGunslinger::PlayHitReactMontage()
 
 void AGunslinger::RotateInPlace(float DeltaTime)
 {
+	if (Combat && Combat->bHoldingFlag)
+	{
+		bUseControllerRotationYaw = false;
+		GetCharacterMovement()->bOrientRotationToMovement = true;
+		TurningInPlace = ETurningInPlace::NotTurning;
+		return;
+	}
+	if (Combat && Combat->EquippedGun)
+	{
+		bUseControllerRotationYaw = true;
+		GetCharacterMovement()->bOrientRotationToMovement = false;
+	}
 	if (bDisableGameplay)
 	{
 		bUseControllerRotationYaw = false;
@@ -720,20 +761,56 @@ void AGunslinger::Look(const FInputActionValue& Value)
 
 void AGunslinger::Jump()
 {
+	if (Combat && Combat->bHoldingFlag) return;
 	if (bDisableGameplay) return;
 	if (bIsCrouched)
 	{
 		Super::UnCrouch();
 	}
-	else
+	else 
 	{
 		Super::Jump();
 	}
 }
 
+void AGunslinger::OnPlayerStateInitialized()
+{
+	GunslingerPlayerState->AddToScore(0.f);
+	GunslingerPlayerState->AddToDefeats(0);
+	SetTeamColor(GunslingerPlayerState->GetTeam());
+	SetSpawnPoint();
+}
+
+void AGunslinger::SetSpawnPoint()
+{
+	if (HasAuthority() && GunslingerPlayerState->GetTeam() != ETeam::NoTeam)
+	{
+		TArray<AActor*> PlayerStarts;
+		UGameplayStatics::GetAllActorsOfClass(this, ATeamPlayerStart::StaticClass(), PlayerStarts);
+		TArray<ATeamPlayerStart*> TeamPlayerStarts;
+		for (AActor* Start : PlayerStarts)
+		{
+			ATeamPlayerStart* TeamStart = Cast<ATeamPlayerStart>(Start);
+			if (TeamStart && TeamStart->Team == GunslingerPlayerState->GetTeam())
+			{
+				TeamPlayerStarts.Add(TeamStart);
+			}
+		}
+		if (TeamPlayerStarts.Num() > 0)
+		{
+			ATeamPlayerStart* ChosenPlayerStart = TeamPlayerStarts[FMath::RandRange(0, TeamPlayerStarts.Num() - 1)];
+
+			SetActorLocationAndRotation(ChosenPlayerStart->GetActorLocation(), FQuat(ChosenPlayerStart->GetActorRotation()));
+		}
+	}
+}
+
 void AGunslinger::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatorController, AActor* DamageCauser)
 {
-	if (bElimmed) return;
+	GunslingerGameMode = GunslingerGameMode == nullptr ? GetWorld()->GetAuthGameMode<AGunslingerGameMode>() : GunslingerGameMode;
+	if (bElimmed && GunslingerGameMode == nullptr) return;
+	Damage = GunslingerGameMode->CalculateDamage(InstigatorController, GetController(), Damage);
+
 	float DamageToHealth = Damage;
 	if (Sheild > 0.f)
 	{
@@ -755,13 +832,9 @@ void AGunslinger::ReceiveDamage(AActor* DamagedActor, float Damage, const UDamag
 
 	if (Health == 0.f)
 	{
-		AGunslingerGameMode* GunslingerGameMode = GetWorld()->GetAuthGameMode<AGunslingerGameMode>();
-		if (GunslingerGameMode)
-		{
-			GunslingerPlayerController = GunslingerPlayerController == nullptr ? Cast<AGunslingerPlayerController>(GetController()) : GunslingerPlayerController;
-			AGunslingerPlayerController* AttackerController = Cast<AGunslingerPlayerController>(InstigatorController);
-			GunslingerGameMode->PlayerEliminated(this, GunslingerPlayerController, AttackerController);
-		}
+		GunslingerPlayerController = GunslingerPlayerController == nullptr ? Cast<AGunslingerPlayerController>(GetController()) : GunslingerPlayerController;
+		AGunslingerPlayerController* AttackerController = Cast<AGunslingerPlayerController>(InstigatorController);
+		GunslingerGameMode->PlayerEliminated(this, GunslingerPlayerController, AttackerController);
 	}
 }
 
@@ -821,7 +894,7 @@ float AGunslinger::CalculateSpeed()
 	return GetVelocity().Size2D();
 }
 
-void AGunslinger::HideCameraIfCharacterClose()
+void AGunslinger::HideCharacterIfCameraClose()
 {
 	if (!IsLocallyControlled()) return;
 	if ((Camera->GetComponentLocation() - GetActorLocation()).Size() < CameraThreshold)
@@ -831,6 +904,10 @@ void AGunslinger::HideCameraIfCharacterClose()
 		{
 			Combat->EquippedGun->GetGunMesh()->bOwnerNoSee = true;
 		}
+		if (Combat && Combat->SecondaryWeapon && Combat->SecondaryWeapon->GetGunMesh())
+		{
+			Combat->SecondaryWeapon->GetGunMesh()->bOwnerNoSee = true;
+		}
 	}
 	else
 	{
@@ -838,6 +915,10 @@ void AGunslinger::HideCameraIfCharacterClose()
 		if (Combat && Combat->EquippedGun && Combat->EquippedGun->GetGunMesh())
 		{
 			Combat->EquippedGun->GetGunMesh()->bOwnerNoSee = false;
+		}
+		if (Combat && Combat->SecondaryWeapon && Combat->SecondaryWeapon->GetGunMesh())
+		{
+			Combat->SecondaryWeapon->GetGunMesh()->bOwnerNoSee = false;
 		}
 	}
 }
@@ -869,6 +950,7 @@ void AGunslinger::Equip()
 	if (bDisableGameplay) return;
 	if (Combat)
 	{
+		if (Combat->bHoldingFlag) return;
 		if (Combat->CombatState == ECombatState::Unoccuiped) ServerEquip();
 		if (Combat->ShouldSwapWeapons() && !HasAuthority() && Combat->CombatState == ECombatState::Unoccuiped && OverlappingGun == nullptr)
 		{
@@ -907,6 +989,7 @@ void AGunslinger::OnRep_OverlappingGun(AGun* LastGun)
 
 void AGunslinger::StartCrouch()
 {
+	if (Combat && Combat->bHoldingFlag) return;
 	if (bDisableGameplay) return;
 	if (bIsCrouched)
 	{
@@ -920,6 +1003,7 @@ void AGunslinger::StartCrouch()
 
 void AGunslinger::Aim()
 {
+	if (Combat && Combat->bHoldingFlag) return;
 	if (bDisableGameplay) return;
 	if (Combat)
 	{
@@ -929,6 +1013,7 @@ void AGunslinger::Aim()
 
 void AGunslinger::Disengage()
 {
+	if (Combat && Combat->bHoldingFlag) return;
 	if (bDisableGameplay) return;
 	if (Combat)
 	{
@@ -938,6 +1023,7 @@ void AGunslinger::Disengage()
 
 void AGunslinger::Fire()
 {
+	if (Combat && Combat->bHoldingFlag) return;
 	if (bDisableGameplay) return;
 	if (Combat)
 	{
@@ -947,6 +1033,7 @@ void AGunslinger::Fire()
 
 void AGunslinger::StopFire()
 {
+	if (Combat && Combat->bHoldingFlag) return;
 	if (bDisableGameplay) return;
 	if (Combat)
 	{
@@ -956,6 +1043,7 @@ void AGunslinger::StopFire()
 
 void AGunslinger::Reload()
 {
+	if (Combat && Combat->bHoldingFlag) return;
 	if (bDisableGameplay) return;
 	if (Combat)
 	{
@@ -965,6 +1053,7 @@ void AGunslinger::Reload()
 
 void AGunslinger::Throw()
 {
+	if (Combat && Combat->bHoldingFlag) return;
 	if (Combat)
 	{
 		Combat->ThrowGrenade();
@@ -1025,4 +1114,23 @@ bool AGunslinger::IsLocallyReloading()
 {
 	if (Combat == nullptr) return false;
 	return Combat->bLocallyReloading;
+}
+
+bool AGunslinger::IsHoldingTheFlag() const
+{
+	if (Combat == nullptr) return false;
+	return Combat->bHoldingFlag;
+}
+
+ETeam AGunslinger::GetTeam()
+{
+	GunslingerPlayerState = GunslingerPlayerState == nullptr ? GetPlayerState<AGunslingerPlayerState>() : GunslingerPlayerState;
+	if (GunslingerPlayerState == nullptr) return ETeam::NoTeam;
+	return GunslingerPlayerState->GetTeam();
+}
+
+void AGunslinger::SetHoldingTheFlag(bool bHolding)
+{
+	if (Combat == nullptr) return;
+	Combat->bHoldingFlag = bHolding;
 }

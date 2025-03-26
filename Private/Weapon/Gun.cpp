@@ -157,6 +157,8 @@ void AGun::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* Oth
 	AGunslinger* Gunslinger = Cast<AGunslinger>(OtherActor);
 	if (Gunslinger)
 	{
+		if (WeaponType == EWeaponType::Flag && Team == Gunslinger->GetTeam()) return;
+		if (Gunslinger->IsHoldingTheFlag()) return;
 		Gunslinger->SetOverlappingGun(this);
 	}
 }
@@ -166,6 +168,8 @@ void AGun::OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* 
 	AGunslinger* Gunslinger = Cast<AGunslinger>(OtherActor);
 	if (Gunslinger)
 	{
+		if (WeaponType == EWeaponType::Flag && Team == Gunslinger->GetTeam()) return;
+		if (Gunslinger->IsHoldingTheFlag()) return;
 		Gunslinger->SetOverlappingGun(nullptr);
 	}
 }

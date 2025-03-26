@@ -32,6 +32,12 @@ public:
 	UTextBlock* ScoreAmount;
 
 	UPROPERTY(meta = (BindWidget))
+	UTextBlock* BlueTeamScore;
+
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* RedTeamScore;
+
+	UPROPERTY(meta = (BindWidget))
 	UTextBlock* DefeatsAmount;
 
 	UPROPERTY(meta = (BindWidget))
@@ -54,4 +60,7 @@ public:
 
 	UPROPERTY(meta = (BindWidgetAnim), Transient)
 	UWidgetAnimation* HighPingImageAnim;
+
+	UPROPERTY(meta = (BindWidget))
+	class UBackgroundBlur* TeamScoreBox;
 };

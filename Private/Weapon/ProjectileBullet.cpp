@@ -21,21 +21,6 @@ AProjectileBullet::AProjectileBullet()
 void AProjectileBullet::BeginPlay()
 {
 	Super::BeginPlay();
-
-	/*FPredictProjectilePathParams PathParms;
-	PathParms.bTraceWithChannel = true;
-	PathParms.bTraceWithCollision = true;
-	PathParms.DrawDebugTime = 5.f;
-	PathParms.DrawDebugType = EDrawDebugTrace::ForDuration;
-	PathParms.LaunchVelocity = GetActorForwardVector() * InitialProjectileSpeed;
-	PathParms.MaxSimTime = 4.f;
-	PathParms.ProjectileRadius = 5.f;
-	PathParms.SimFrequency = 5.f;
-	PathParms.StartLocation = GetActorLocation();
-	PathParms.TraceChannel = ECollisionChannel::ECC_Visibility;
-	PathParms.ActorsToIgnore.Add(this);
-	FPredictProjectilePathResult PathResult;
-	UGameplayStatics::PredictProjectilePath(this, PathParms, PathResult);*/
 }
 
 #if WITH_EDITOR
@@ -65,7 +50,8 @@ void AProjectileBullet::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, 
 		{
 			if (OwnerCharacter->HasAuthority() && !bUseServerSideRewind)
 			{
-				UGameplayStatics::ApplyDamage(OtherActor, Damage, OwnerController, this, UDamageType::StaticClass());
+				const float DamageToCause = Hit.BoneName.ToString() == FString("head") ? HeadShotDamage : Damage;
+				UGameplayStatics::ApplyDamage(OtherActor, DamageToCause, OwnerController, this, UDamageType::StaticClass());
 				Super::OnHit(HitComp, OtherActor, OtherComp, NormalImpluse, Hit);
 				return;
 			}

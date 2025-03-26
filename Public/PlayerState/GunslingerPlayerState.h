@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
+#include "GunslingerTypes/Team.h"
 #include "GunslingerPlayerState.generated.h"
 
 /**
@@ -24,6 +25,7 @@ public:
 	void AddToScore(float ScoreAmount);
 	void AddToDefeats(int32 DefeatsAmount);
 
+
 private:
 	UPROPERTY()
 	class AGunslinger* Character;
@@ -33,4 +35,15 @@ private:
 
 	UPROPERTY(ReplicatedUsing = OnRep_Defeats)
 	int32 Defeats; 
+
+	UPROPERTY(ReplicatedUsing = OnRep_Team)
+	ETeam Team = ETeam::NoTeam;
+
+	UFUNCTION()
+	void OnRep_Team();
+
+
+public:
+	FORCEINLINE ETeam GetTeam() const { return Team; }
+	void SetTeam(ETeam TeamToSet);
 };

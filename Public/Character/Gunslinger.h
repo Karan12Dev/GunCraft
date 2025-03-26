@@ -9,6 +9,7 @@
 #include "Interfaces/CrosshairsInterface.h"
 #include "Components/TimelineComponent.h"
 #include "GunslingerTypes/CombatState.h"
+#include "GunslingerTypes/Team.h"
 #include "Gunslinger.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnLeftGame);
@@ -64,12 +65,24 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void MulticastLostTheLead();
 
+	void SetTeamColor(ETeam Team);
+
+	UPROPERTY(Replicated, EditDefaultsOnly)
+	float MinRunningSpeed = 250;
+
+	UPROPERTY(Replicated, EditDefaultsOnly)
+	float MaxRunningSpeed = 700;
+
+	float InitialMaxRunningSpeed = 700;
+
 
 protected:
 	virtual void BeginPlay() override;
 	void AimOffset(float DeltaTime);
 	void CalculateAO_Pitch();
 	virtual void Jump() override;
+	void SetSpawnPoint();
+	void OnPlayerStateInitialized();
 
 	UFUNCTION()
 	void ReceiveDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, class AController* InstigatorController, AActor* DamageCauser);
@@ -136,7 +149,7 @@ private:
 	float CalculateSpeed();
 	void SimProxiesTurn();
 	void PlayElimMontage();
-	void HideCameraIfCharacterClose();
+	void HideCharacterIfCameraClose();
 	void PlayHitReactMontage();
 	void InitializeInput();
 	void RotateInPlace(float DeltaTime);
@@ -157,6 +170,9 @@ private:
 	UPROPERTY(VisibleAnywhere)
 	class ULagCompensationComponent* LagCompensation;
 	//\\
+
+	UPROPERTY()
+	class AGunslingerGameMode* GunslingerGameMode;
 
 	UPROPERTY(VisibleAnywhere)
 	class USpringArmComponent* SpringArm;
@@ -182,12 +198,6 @@ private:
 	UInputAction* RunAction;
 	void Run();
 	void StopRun();
-
-	UPROPERTY(Replicated, EditDefaultsOnly)
-	float MinRunningSpeed = 250;
-
-	UPROPERTY(Replicated, EditDefaultsOnly)
-	float MaxRunningSpeed = 700;
 
 	UFUNCTION(Server, Reliable)
 	void ClientRun();
@@ -314,8 +324,24 @@ private:
 	UPROPERTY(VisibleDefaultsOnly, Category = "Elim")
 	UMaterialInstanceDynamic* DynamicDissloveMaterialInstance;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Elim")
+	UPROPERTY(VisibleAnywhere, Category = "Elim")
 	UMaterialInstance* DissloveMaterialInstance;
+
+	//	Team Colors
+	UPROPERTY(EditDefaultsOnly, Category = "Elim")
+	UMaterialInstance* OriginalMaterial;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Elim")
+	UMaterialInstance* RedDissloveMatInst;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Elim")
+	UMaterialInstance* RedMaterial;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Elim")
+	UMaterialInstance* BlueDissloveMatInst;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Elim")
+	UMaterialInstance* BlueMaterial;
 
 	//	Elim Effect
 	UPROPERTY(EditDefaultsOnly, Category = "Elim")
@@ -335,7 +361,6 @@ private:
 
 	UPROPERTY(EditDefaultsOnly)
 	UStaticMeshComponent* AttachedGrenade;
-
 
 	//	Default Weapon
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
@@ -372,4 +397,7 @@ public:
 	FORCEINLINE UBuffComponent* GetBuffComponent() const { return BuffComponent; }
 	bool IsLocallyReloading();
 	FORCEINLINE ULagCompensationComponent* GetLagCompensation() const { return LagCompensation; }
+	bool IsHoldingTheFlag() const;
+	ETeam GetTeam();
+	void SetHoldingTheFlag(bool bHolding);
 };

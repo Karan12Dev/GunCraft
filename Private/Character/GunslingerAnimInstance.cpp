@@ -36,6 +36,7 @@ void UGunslingerAnimInstance::NativeUpdateAnimation(float DeltaTime)
 	TurningInPlace = Gunslinger->GetTurningInPlace();
 	bRotateRootBone = Gunslinger->ShouldRotateRootBone();
 	bElimmed = Gunslinger->IsElimmed();
+	bHoldingTheFlag = Gunslinger->IsHoldingTheFlag();
 
 	// Offset Yaw for Strafing
 	FRotator AimRotation = Gunslinger->GetBaseAimRotation();

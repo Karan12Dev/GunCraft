@@ -6,11 +6,13 @@
 #include "PlayerController/GunslingerPlayerController.h"
 #include "Net/UnrealNetwork.h"
 
+
 void AGunslingerPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ThisClass, Defeats);
+	DOREPLIFETIME(ThisClass, Team);
 }
 
 void AGunslingerPlayerState::OnRep_Score()
@@ -67,5 +69,23 @@ void AGunslingerPlayerState::AddToDefeats(int32 DefeatsAmount)
 		{
 			Controller->SetHUDDefeats(Defeats);
 		}
+	}
+}
+
+void AGunslingerPlayerState::SetTeam(ETeam TeamToSet)
+{
+	Team = TeamToSet;
+	AGunslinger* Gunslinger = Cast<AGunslinger>(GetPawn());
+	if (Gunslinger)
+	{
+		Gunslinger->SetTeamColor(Team);
+	}
+}
+void AGunslingerPlayerState::OnRep_Team()
+{
+	AGunslinger* Gunslinger = Cast<AGunslinger>(GetPawn());
+	if (Gunslinger)
+	{
+		Gunslinger->SetTeamColor(Team);
 	}
 }

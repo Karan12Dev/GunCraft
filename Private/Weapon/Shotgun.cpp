@@ -26,6 +26,7 @@ void AShotgun::FireShotgun(const TArray<FVector_NetQuantize>& HitTargets)
 		const FVector Start = SocketTransform.GetLocation();
 
 		TMap<AGunslinger*, uint32> HitMap;
+		TMap<AGunslinger*, uint32> HeadShotHitMap;
 		for (FVector_NetQuantize HitTarget : HitTargets)
 		{
 			FHitResult FireHit;
@@ -34,14 +35,18 @@ void AShotgun::FireShotgun(const TArray<FVector_NetQuantize>& HitTargets)
 			AGunslinger* Gunslinger = Cast<AGunslinger>(FireHit.GetActor());
 			if (Gunslinger)
 			{
-				if (HitMap.Contains(Gunslinger))
+				const bool bHeadShot = FireHit.BoneName.ToString() == FString("head");
+				if (bHeadShot)
 				{
-					HitMap[Gunslinger]++;
+					if (HeadShotHitMap.Contains(Gunslinger)) HeadShotHitMap[Gunslinger]++;
+					else HeadShotHitMap.Emplace(Gunslinger, 1);
 				}
 				else
 				{
-					HitMap.Emplace(Gunslinger, 1);
+					if (HitMap.Contains(Gunslinger)) HitMap[Gunslinger]++;
+					else HitMap.Emplace(Gunslinger, 1);
 				}
+
 				if (ImpactParticle)
 				{
 					UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), ImpactParticle, FireHit.ImpactPoint, FireHit.ImpactNormal.Rotation());
@@ -53,18 +58,37 @@ void AShotgun::FireShotgun(const TArray<FVector_NetQuantize>& HitTargets)
 			}
 		}
 		TArray<AGunslinger*> HitCharacters;
+		TMap<AGunslinger*, float> DamageMap;
 		for (auto HitPair : HitMap)
 		{
-			if (HitPair.Key && InstigatorController)
+			if (HitPair.Key)
+			{
+				DamageMap.Emplace(HitPair.Key, HitPair.Value * Damage);
+				HitCharacters.AddUnique(HitPair.Key);
+			}
+		}
+		for (auto HeadShotHitPair : HeadShotHitMap)
+		{
+			if (HeadShotHitPair.Key)
+			{
+				if (DamageMap.Contains(HeadShotHitPair.Key)) DamageMap[HeadShotHitPair.Key] += HeadShotHitPair.Value * HeadShotDamage;
+				else DamageMap.Emplace(HeadShotHitPair.Key, HeadShotHitPair.Value * HeadShotDamage);
+				HitCharacters.AddUnique(HeadShotHitPair.Key);
+			}
+		}
+
+		for (auto DamagePair : DamageMap)
+		{
+			if (DamagePair.Key && InstigatorController)
 			{
 				bool bCauseAuthDamage = !bUseServerSideRewind || OwnerPawn->IsLocallyControlled();
 				if (HasAuthority() && bCauseAuthDamage)
 				{
-					UGameplayStatics::ApplyDamage(HitPair.Key, Damage * HitPair.Value, InstigatorController, this, UDamageType::StaticClass());
+					UGameplayStatics::ApplyDamage(DamagePair.Key, DamagePair.Value, InstigatorController, this, UDamageType::StaticClass());
 				}
-				HitCharacters.Add(HitPair.Key);
 			}
 		}
+
 		if (!HasAuthority() && bUseServerSideRewind)
 		{
 			OwnerCharacter = OwnerCharacter == nullptr ? Cast<AGunslinger>(OwnerPawn) : OwnerCharacter;

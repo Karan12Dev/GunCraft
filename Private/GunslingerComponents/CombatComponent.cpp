@@ -64,6 +64,7 @@ void UCombatComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME_CONDITION(ThisClass, CarriedAmmo, COND_OwnerOnly);
 	DOREPLIFETIME(ThisClass, CombatState);
 	DOREPLIFETIME(ThisClass, Grenades);
+	DOREPLIFETIME(ThisClass, bHoldingFlag);
 }
 
 void UCombatComponent::SetHUDCrosshairs(float DeltaTime)
@@ -269,10 +270,10 @@ void UCombatComponent::ShotgunLocalFire(const TArray<FVector_NetQuantize>& Trace
 	if (Shotgun == nullptr || Character == nullptr) return;
 	if (CombatState == ECombatState::Reloading || CombatState == ECombatState::Unoccuiped)
 	{
+		bLocallyReloading = false;
 		Character->PlayFireMontage(bAiming);
 		Shotgun->FireShotgun(TraceHitTargets);
 		CombatState = ECombatState::Unoccuiped;
-		bLocallyReloading = false;
 	}
 }
 
@@ -468,8 +469,12 @@ void UCombatComponent::FinishSwap()
 	}
 }
 
-void UCombatComponent::FinishSwapAttachWeapons()
+void UCombatComponent::FinishSwapAttachWeapons_Implementation()
 {
+	AGun* TempWeapon = EquippedGun;
+	EquippedGun = SecondaryWeapon;
+	SecondaryWeapon = TempWeapon;
+
 	EquippedGun->SetWeaponState(EWeaponState::Equipped);
 	AttachActorToSocket(EquippedGun, FName("RHSocket"));
 	EquippedGun->SetHUDAmmo();
@@ -480,6 +485,11 @@ void UCombatComponent::FinishSwapAttachWeapons()
 	}
 	SecondaryWeapon->SetWeaponState(EWeaponState::EquippedSecondary);
 	AttachActorToSocket(SecondaryWeapon, FName("BackpackSocket"));
+
+	if (EquippedGun->GetWeaponType() == EWeaponType::SniperRifle && bAiming)
+	{
+		Character->ShowSniperScopeWidget(bAiming);
+	}
 }
 
 void UCombatComponent::HandleReload()
@@ -716,16 +726,29 @@ void UCombatComponent::EquipGun(AGun* GunToEquip)
 {
 	if (Character == nullptr || GunToEquip == nullptr) return;
 	if (CombatState != ECombatState::Unoccuiped) return;
-	if (EquippedGun != nullptr && SecondaryWeapon == nullptr)
+
+	if (GunToEquip->GetWeaponType() == EWeaponType::Flag)
 	{
-		EquipSecondaryWeapon(GunToEquip);
+		Character->Crouch();
+		bHoldingFlag = true;
+		GunToEquip->SetWeaponState(EWeaponState::Equipped);
+		AttachActorToSocket(GunToEquip, FName("FlagSocket"));
+		GunToEquip->SetOwner(Character);
+		TheFlag = GunToEquip;
 	}
 	else
 	{
-		EquipPrimaryWeapon(GunToEquip);
+		if (EquippedGun != nullptr && SecondaryWeapon == nullptr)
+		{
+			EquipSecondaryWeapon(GunToEquip);
+		}
+		else
+		{
+			EquipPrimaryWeapon(GunToEquip);
+		}
+		Character->GetCharacterMovement()->bOrientRotationToMovement = false;
+		Character->bUseControllerRotationYaw = true;
 	}
-	Character->GetCharacterMovement()->bOrientRotationToMovement = false;
-	Character->bUseControllerRotationYaw = true;
 }
 
 void UCombatComponent::OnRep_EquippedGun()
@@ -775,14 +798,10 @@ void UCombatComponent::AttachActorToSocket(AActor* ActorToAttach, FName SocketNa
 
 void UCombatComponent::SwapWeapons()
 {
-	if (CombatState != ECombatState::Unoccuiped || Character == nullptr) return;
+	if (CombatState != ECombatState::Unoccuiped || Character == nullptr || !Character->HasAuthority()) return;
 
 	Character->PlaySwapWeaponMontage();
 	CombatState = ECombatState::SwappingWeapon;
-
-	AGun* TempWeapon = EquippedGun;
-	EquippedGun = SecondaryWeapon;
-	SecondaryWeapon = TempWeapon;
 }
 
 bool UCombatComponent::ShouldSwapWeapons()
@@ -804,5 +823,13 @@ void UCombatComponent::UpdateCarriedAmmoAndWeaponName()
 		GunslingerController->SetHUDCarriedAmmo(CarriedAmmo);
 		FString WeaponTypeName = StaticEnum<EWeaponType>()->GetNameStringByValue((int64)EquippedGun->GetWeaponType());
 		GunslingerController->SetHUDWeaponName(*WeaponTypeName);
+	}
+}
+
+void UCombatComponent::OnRep_HoldingFlag()
+{
+	if (bHoldingFlag && Character && Character->IsLocallyControlled())
+	{
+		Character->Crouch();
 	}
 }

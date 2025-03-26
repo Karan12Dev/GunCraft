@@ -16,6 +16,7 @@ enum class EWeaponType : uint8
 	Shotgun UMETA(DisplayName = "Shotgun"),
 	SniperRifle UMETA(DisplayName = "Sniper Rifle"),
 	GrenadeLauncher UMETA(DisplayName = "Grenade Launcher"),
+	Flag UMETA(DisplayName = "Flag"),
 
 	MAX UMETA(DisplayName = "DefaultMAX")
 };

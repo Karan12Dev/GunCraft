@@ -18,6 +18,9 @@ class GUNCRAFT_API UElimAnnouncement : public UUserWidget
 public:
 	void SetElimAnnouncementText(FString AttackerName, FString VictimName);
 
+	UPROPERTY(meta = (BindWidget))
+	class UBackgroundBlur* BlurBox;
+
 
 private:
 	UPROPERTY(meta = (BindWidget))

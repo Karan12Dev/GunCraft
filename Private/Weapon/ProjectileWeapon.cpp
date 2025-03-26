@@ -38,6 +38,7 @@ void AProjectileWeapon::Fire(const FVector& HitTarget)
 						{
 							SpawnedProjectile->bUseServerSideRewind = false;
 							SpawnedProjectile->Damage = Damage;
+							SpawnedProjectile->HeadShotDamage = HeadShotDamage;
 						}
 					}
 				}
@@ -65,7 +66,6 @@ void AProjectileWeapon::Fire(const FVector& HitTarget)
 							SpawnedProjectile->bUseServerSideRewind = true;
 							SpawnedProjectile->TraceStart = SocketTransform.GetLocation();
 							SpawnedProjectile->InitialVelocity = SpawnedProjectile->GetActorForwardVector() * SpawnedProjectile->InitialProjectileSpeed;
-							SpawnedProjectile->Damage = Damage;
 						}
 					}
 				}
@@ -93,6 +93,7 @@ void AProjectileWeapon::Fire(const FVector& HitTarget)
 					{
 						SpawnedProjectile->bUseServerSideRewind = false;
 						SpawnedProjectile->Damage = Damage;
+						SpawnedProjectile->HeadShotDamage = HeadShotDamage;
 					}
 				}
 			}

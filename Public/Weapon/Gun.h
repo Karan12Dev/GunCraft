@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Weapon/WeaponTypes.h"
+#include "GunslingerTypes/Team.h"
 #include "Gun.generated.h"
 
 
@@ -42,7 +43,7 @@ public:
 	void SetHUDAmmo();
 	void ShowPickupWidget(bool bShowWidget);
 	virtual void Fire(const FVector& HitTarget);
-	void Dropped();
+	virtual void Dropped();
 	void AddAmmo(int32 AmmoToAdd);
 
 	//Textures for the weapon crosshair
@@ -108,6 +109,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
 	float Damage = 20.f;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
+	float HeadShotDamage = 50.f;
+
 	UPROPERTY(Replicated ,EditDefaultsOnly, Category = "Weapon")
 	bool bUseServerSideRewind = false;
 
@@ -163,8 +167,11 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Weapon")
 	int32 MagCapacity;
 
-	UPROPERTY(EditDefaultsOnly)
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon")
 	EWeaponType WeaponType;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Properties")
+	ETeam Team;
 
 	//	The number of unprocessed server requests for Ammo.
 	//	Incremented in SpendRound, decremented in ClientUpdateAmmo.
@@ -174,6 +181,8 @@ private:
 public:
 	void SetWeaponState(EWeaponState State);
 	FORCEINLINE USkeletalMeshComponent* GetGunMesh() const { return GunMesh; }
+	FORCEINLINE USphereComponent* GetAreaSphere() const { return AreaSphere; }
+	FORCEINLINE UWidgetComponent* GetPickupWidget() const { return PickupWidget; }
 	FORCEINLINE float GetZoomedFOV() const { return ZoomedFOV; }
 	FORCEINLINE float GetZoomInterpSpeed() const { return ZoomInterpSpeed; }
 	bool IsEmpty();
@@ -182,4 +191,6 @@ public:
 	FORCEINLINE int32 GetAmmo() const { return Ammo; }
 	FORCEINLINE int32 GetMagCapacity() const { return MagCapacity; }
 	FORCEINLINE float GetDamage() const { return Damage; }
+	FORCEINLINE float GetHeadShotDamage() const { return HeadShotDamage; }
+	FORCEINLINE ETeam GetTeam() const { return Team; }
 };

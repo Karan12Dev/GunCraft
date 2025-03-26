@@ -22,6 +22,7 @@ public:
 	virtual void PlayerEliminated(class AGunslinger* ElimmedCharacter, class AGunslingerPlayerController* VictimController, AGunslingerPlayerController* AttackerController);
 	virtual void RequestRespawn(ACharacter* ElimmedCharacter, AController* ElimmedController);
 	void PlayerLeftGame(class AGunslingerPlayerState* PlayerLeaving);
+	virtual float CalculateDamage(AController* Attacker, AController* Victim, float BaseDamage);
 
 	UPROPERTY(EditDefaultsOnly)
 	float WarmupTime = 10.f;
@@ -33,6 +34,8 @@ public:
 
 	UPROPERTY(EditDefaultsOnly)
 	float CooldownTime = 10.f;
+
+	bool bTeamsMatch = false;
 	
 
 protected:

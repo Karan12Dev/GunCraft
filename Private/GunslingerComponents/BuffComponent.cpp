@@ -84,19 +84,20 @@ void UBuffComponent::BuffSpeed(float BuffBaseSpeed, float BuffCrouchSpeed, float
 {
 	if (Character == nullptr || Character->GetCharacterMovement() == nullptr) return;
 	Character->GetWorldTimerManager().SetTimer(SpeedBuffTimer, this, &ThisClass::ResetSpeeds, BuffTime);
-	MulticastSpeedBuff(BuffBaseSpeed, BuffCrouchSpeed);
+	MulticastSpeedBuff(BuffBaseSpeed, Character->MinRunningSpeed ,BuffCrouchSpeed);
 }
 
 void UBuffComponent::ResetSpeeds()
 {
 	if (Character == nullptr || Character->GetCharacterMovement() == nullptr) return;
-	MulticastSpeedBuff(InitialBaseSpeed, InitialCrouchSpeed);
+	MulticastSpeedBuff(Character->InitialMaxRunningSpeed ,Character->MinRunningSpeed, InitialCrouchSpeed);
 }
 
-void UBuffComponent::MulticastSpeedBuff_Implementation(float BaseSpeed, float CrouchSpeed)
+void UBuffComponent::MulticastSpeedBuff_Implementation(float BaseMaxSpeed, float BaseMinSpeed, float CrouchSpeed)
 {
 	if (Character == nullptr || Character->GetCharacterMovement() == nullptr) return;
-	Character->GetCharacterMovement()->MaxWalkSpeed = BaseSpeed;
+	Character->MaxRunningSpeed = BaseMaxSpeed;
+	Character->MinRunningSpeed = BaseMinSpeed;
 	Character->GetCharacterMovement()->MaxWalkSpeedCrouched = CrouchSpeed;
 }
 

@@ -5,6 +5,9 @@
 #include "HUD/CharacterOverlay.h"
 #include "HUD/Announcement.h"
 #include "HUD/ElimAnnouncement.h"
+#include "Components/BackgroundBlur.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Components/CanvasPanelSlot.h"
 
 
 void AGunslingerHUD::BeginPlay()
@@ -95,6 +98,38 @@ void AGunslingerHUD::AddElimAnnouncement(FString Attacker, FString Victim)
 		{
 			ElimAnnouncementWidget->SetElimAnnouncementText(Attacker, Victim);
 			ElimAnnouncementWidget->AddToViewport();
+
+			if (ElimMessages.Num() > 0)
+			{
+				for (UElimAnnouncement* Msg : ElimMessages)
+				{
+					if (Msg && Msg->BlurBox)
+					{
+						UCanvasPanelSlot* CanvasSlot = UWidgetLayoutLibrary::SlotAsCanvasSlot(Msg->BlurBox);
+						if (CanvasSlot)
+						{
+							FVector2D Position = CanvasSlot->GetPosition();
+							FVector2D NewPosition(CanvasSlot->GetPosition().X, Position.Y - CanvasSlot->GetSize().Y);
+							CanvasSlot->SetPosition(NewPosition);
+						}
+					}
+				}
+			}
+
+			ElimMessages.Add(ElimAnnouncementWidget);
+
+			FTimerHandle ElimMsgTimer;
+			FTimerDelegate ElimMsgDelegate;
+			ElimMsgDelegate.BindUFunction(this, FName("ElimAnnouncementTimerFinished"), ElimAnnouncementWidget);
+			GetWorldTimerManager().SetTimer(ElimMsgTimer, ElimMsgDelegate, ElimAnnouncementTime, false);
 		}
+	}
+}
+
+void AGunslingerHUD::ElimAnnouncementTimerFinished(UElimAnnouncement* MsgToRemove)
+{
+	if (MsgToRemove)
+	{
+		MsgToRemove->RemoveFromParent();
 	}
 }

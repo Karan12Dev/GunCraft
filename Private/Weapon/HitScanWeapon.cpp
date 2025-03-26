@@ -33,7 +33,8 @@ void AHitScanWeapon::Fire(const FVector& HitTarget)
 			bool bCauseAuthDamage = !bUseServerSideRewind || OwnerPawn->IsLocallyControlled();
 			if (HasAuthority() && bCauseAuthDamage)
 			{
-				UGameplayStatics::ApplyDamage(Gunslinger, Damage, InstigatorController, this, UDamageType::StaticClass());
+				const float DamageToCause = FireHit.BoneName.ToString() == FString("head") ? HeadShotDamage : Damage;
+				UGameplayStatics::ApplyDamage(Gunslinger, DamageToCause, InstigatorController, this, UDamageType::StaticClass());
 			}
 			if (!HasAuthority() && bUseServerSideRewind)
 			{
@@ -41,7 +42,7 @@ void AHitScanWeapon::Fire(const FVector& HitTarget)
 				OwnerController = OwnerController == nullptr ? Cast<AGunslingerPlayerController>(InstigatorController) : OwnerController;
 				if (OwnerCharacter && OwnerController && OwnerCharacter->GetLagCompensation() && OwnerCharacter->IsLocallyControlled())
 				{
-					OwnerCharacter->GetLagCompensation()->ServerScoreRequest(Gunslinger, Start, HitTarget, OwnerController->GetServerTime() - OwnerController->SingleTripTime, this);
+					OwnerCharacter->GetLagCompensation()->ServerScoreRequest(Gunslinger, Start, HitTarget, OwnerController->GetServerTime() - OwnerController->SingleTripTime);
 				}
 			}
 		}

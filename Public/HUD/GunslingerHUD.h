@@ -66,6 +66,14 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Announcement"	)
 	TSubclassOf<class UElimAnnouncement> ElimAnnouncementClass;
 
+	float ElimAnnouncementTime = 4.f;
+
+	UFUNCTION()
+	void ElimAnnouncementTimerFinished(UElimAnnouncement* MsgToRemove);
+
+	UPROPERTY()
+	TArray<UElimAnnouncement*> ElimMessages;
+
 
 public:
 	FORCEINLINE void SetHUDPackage(const FHUDPackage& Package) { HUDPackage = Package; }

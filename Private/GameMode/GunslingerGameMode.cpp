@@ -65,9 +65,14 @@ void AGunslingerGameMode::OnMatchStateSet()
 		AGunslingerPlayerController* GunslingerPlayer = Cast<AGunslingerPlayerController>(*It);
 		if (GunslingerPlayer)
 		{
-			GunslingerPlayer->OnMatchStateSet(MatchState);
+			GunslingerPlayer->OnMatchStateSet(MatchState, bTeamsMatch);
 		}
 	}
+}
+
+float AGunslingerGameMode::CalculateDamage(AController* Attacker, AController* Victim, float BaseDamage)
+{
+	return BaseDamage;
 }
 
 void AGunslingerGameMode::PlayerEliminated(AGunslinger* ElimmedCharacter, AGunslingerPlayerController* VictimController, AGunslingerPlayerController* AttackerController)

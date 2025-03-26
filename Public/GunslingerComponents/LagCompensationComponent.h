@@ -80,7 +80,7 @@ public:
 	void EnableCharacterMeshCollision(AGunslinger* HitCharacter, ECollisionEnabled::Type CollisionEnabled);
 	
 	UFUNCTION(Server, Reliable)
-	void ServerScoreRequest(AGunslinger* HitCharacter, const FVector_NetQuantize& TraceStart, const FVector_NetQuantize& HitLocation, float HitTime, class AGun* DamageCauser);
+	void ServerScoreRequest(AGunslinger* HitCharacter, const FVector_NetQuantize& TraceStart, const FVector_NetQuantize& HitLocation, float HitTime);
 
 	UFUNCTION(Server, Reliable)
 	void ProjectileServerScoreReequest(AGunslinger* HitCharacter, const FVector_NetQuantize& TraceStart, const FVector_NetQuantize100& InitialVelocity, float HitTime);

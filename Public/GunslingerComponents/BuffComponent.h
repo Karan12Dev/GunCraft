@@ -52,7 +52,7 @@ private:
 	float InitialCrouchSpeed;
 
 	UFUNCTION(NetMulticast, Reliable)
-	void MulticastSpeedBuff(float BaseSpeed, float CrouchSpeed);
+	void MulticastSpeedBuff(float BaseMaxSpeed, float BaseMinSpeed ,float CrouchSpeed);
 
 	//	Jump Buff
 	FTimerHandle JumpBuffTimer;

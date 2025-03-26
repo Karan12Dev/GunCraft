@@ -24,7 +24,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Weapon | Projectile")
 	float InitialProjectileSpeed = 2000.f;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon | Projectile")
 	float Damage = 10.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Weapon | Projectile")
+	float HeadShotDamage = 20.f;
 
 
 protected:
