@@ -1,7 +1,9 @@
 # GunCraft
 
 🎮 Game Type:
+
 A third-person multiplayer shooter with fast-paced combat and strategic gameplay.
+
 
 🌐 Online Multiplayer (Steam Integration):
 Uses Steam Online Subsystem to enable seamless matchmaking and player connections.
