@@ -12,7 +12,7 @@ Uses Steam Online Subsystem to enable seamless matchmaking and player connection
 
 Allows players to host and join matches with other players globally.
 
-
+|
 
 🔫 Weapons & Mechanics:
 
@@ -22,7 +22,7 @@ Gun-Specific Mechanics: Each weapon has unique characteristics like fire rate, d
 
 Enhanced Input System: Used for precise movement and firing mechanics to ensure smooth controls.
 
-
+|
 
 🛡️ Buffs & Pickups:
 
@@ -32,7 +32,7 @@ Ammo Pickup: Allows players to replenish their weapon ammunition.
 
 Health & Shield Pickup: Restores lost health or adds a protective shield to absorb damage.
 
-
+|
 
 Game Modes
 
@@ -60,7 +60,7 @@ Players must capture the enemy's flag and return it to their base to score point
 
 Strategic gameplay with both offensive and defensive roles.
 
-
+|
 
 🕹️ Lag Compensation - Server-Side Rewind (SSR):
 
